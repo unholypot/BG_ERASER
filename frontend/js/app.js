@@ -293,13 +293,15 @@ async function loadGallery() {
                 
                 grid.innerHTML = images.map(img => {
                     // Use the retrieve endpoint for all images
-                    const imageUrl = `${CONFIG.API_HOST}/images/retrieve?filename=${encodeURIComponent(img.processedS3Url || img.filename)}`;
-                    
+                    // const imageUrl = `${CONFIG.API_HOST}/images/retrieve?filename=${encodeURIComponent(img.processedS3Url || img.filename)}`;
+                    // For local dev, use direct path to processed images
+                    const imageUrl = `${CONFIG.API_HOST}/uploads/${img.processedS3Url || img.filename}`;
+
                     return `
                         <div class="gallery-item" onclick="viewImage('${img.processedS3Url || img.filename}', '${img.imageName}')">
                             <img src="${imageUrl}" 
                                  alt="${img.imageName}"
-                                 onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRTBFMEUwIi8+Cjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTk5OTkiPkltYWdlIE5vdCBGb3VuZDwvdGV4dD4KPC9zdmc+'"
+                                 onerror="console.error('Failed to load thumbnail:', '${imageUrl}'); this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRTBFMEUwIi8+Cjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTk5OTkiPkltYWdlIE5vdCBGb3VuZDwvdGV4dD4KPC9zdmc+'"
                             >
                             <div class="gallery-item-info">
                                 <div class="gallery-item-name">${img.imageName}</div>
@@ -331,9 +333,11 @@ async function loadGallery() {
 
 function viewImage(filename, displayName) {
     // ===== DEV-ONLY BEGIN =====
-    const imageUrl = filename.includes('/') 
-        ? `${CONFIG.API_HOST}/uploads/${filename}`
-        : `${CONFIG.API_HOST}/images/retrieve?filename=${encodeURIComponent(filename)}`;
+    //const imageUrl = filename.includes('/') 
+    //    ? `${CONFIG.API_HOST}/uploads/${filename}`
+    //    : `${CONFIG.API_HOST}/images/retrieve?filename=${encodeURIComponent(filename)}`;
+
+    const imageUrl = `${CONFIG.API_HOST}/uploads/${filename}`;
     // ===== DEV-ONLY END =====
     
     const modal = document.createElement('div');
