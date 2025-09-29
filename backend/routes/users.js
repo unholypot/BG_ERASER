@@ -1,19 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
-// const cognitoService = require('../services/cognito');
-const cognitoService = process.env.NODE_ENV === 'development' // testing
-  ? require('../services/cognito')
-  : require('../services/mockCognito');
-
+const cognitoService = require('../services/cognito');
 const databaseService = require('../services/database');
 
-// Register new user
+// Remove the conditional import - always use real Cognito
+// const cognitoService = process.env.NODE_ENV === 'development' 
+//   ? require('../services/cognito')
+//   : require('../services/mockCognito');
+
+
 router.post('/register', async (req, res) => {
   try {
     const { username, email, password, firstName, lastName } = req.body;
     
-    // Validate input
     if (!username || !email || !password || !firstName || !lastName) {
       return res.status(400).json({
         error: true,
@@ -21,17 +21,17 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Sign up with Cognito
     const result = await cognitoService.signUp(username, password, email, firstName, lastName);
     
-    // Log registration
     await databaseService.saveLog(result.userSub, 'User registered');
     
     res.json({
       error: false,
-      message: 'Registration successful. Please check your email for confirmation code.'
+      message: 'Registration successful. Please check your email for confirmation code.',
+      needsConfirmation: true
     });
   } catch (error) {
+    console.error('Registration error:', error);
     res.status(400).json({
       error: true,
       message: error.message
@@ -62,34 +62,7 @@ router.post('/confirm', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-
-     // Local dev admin bypass
-    if (process.env.NODE_ENV === 'development') {
-      // Check for admin credentials or your email with the admin password
-      if ((username === 'admin' && password === 'admin12345678') || 
-          (username.includes('@') && password === 'admin12345678')) {
-        const token = jwt.sign(
-          { 
-            userId: 'local_admin',
-            username: username === 'admin' ? 'admin' : username,
-            email: username === 'admin' ? 'admin@local.dev' : username
-          },
-          process.env.JWT_SECRET,
-          { expiresIn: process.env.JWT_EXPIRY }
-        );
-        
-        // Log successful login
-        await databaseService.saveLog('local_admin', `Dev login: ${username}`);
-        
-        return res.json({
-          error: false,
-          token: token,
-          expiresIn: 604800 // 7 days in seconds
-        });
-      }
-    }
     
-    // Authenticate with Cognito
     const authResult = await cognitoService.signIn(username, password);
     
     // Parse the ID token to get user info
@@ -97,7 +70,6 @@ router.post('/login', async (req, res) => {
       Buffer.from(authResult.idToken.split('.')[1], 'base64').toString()
     );
     
-    // Create JWT token for our app
     const token = jwt.sign(
       { 
         userId: idTokenPayload.sub,
@@ -108,15 +80,15 @@ router.post('/login', async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRY }
     );
     
-    // Log successful login
     await databaseService.saveLog(idTokenPayload.sub, 'User logged in');
     
     res.json({
       error: false,
       token: token,
-      expiresIn: 604800 // 7 days in seconds
+      expiresIn: 604800
     });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(401).json({
       error: true,
       message: 'Invalid credentials'
