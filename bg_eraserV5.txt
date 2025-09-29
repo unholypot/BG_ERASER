@@ -1,0 +1,3578 @@
+
+================================================================================
+File: backend/combined.log
+Size: 3.35 kB
+================================================================================
+
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"GET /"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"POST /users/register"}
+{"level":"info","message":"POST /users/confirm"}
+{"level":"info","message":"POST /users/resend-confirmation-code"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"POST /users/login"}
+{"level":"info","message":"POST /users/login"}
+{"level":"info","message":"POST /users/login"}
+{"level":"info","message":"POST /users/login"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"POST /users/login"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"GET /"}
+{"level":"info","message":"POST /users/login"}
+{"level":"info","message":"GET /logs"}
+{"level":"info","message":"GET /logs"}
+{"level":"info","message":"GET /logs"}
+{"level":"info","message":"POST /users/login"}
+{"level":"info","message":"GET /logs"}
+{"level":"info","message":"GET /logs"}
+{"level":"info","message":"GET /logs"}
+{"level":"info","message":"POST /upload"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"POST /upload"}
+{"level":"info","message":"GET /logs"}
+{"level":"info","message":"GET /logs"}
+{"level":"info","message":"GET /logs"}
+{"level":"info","message":"POST /users/login"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"POST /upload"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"POST /upload"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"POST /users/login"}
+{"level":"info","message":"POST /upload"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"POST /upload"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"POST /upload"}
+{"level":"info","message":"GET /retrieve"}
+{"level":"info","message":"GET /logs"}
+{"level":"info","message":"GET /logs"}
+{"level":"info","message":"GET /logs"}
+{"level":"info","message":"GET /logs"}
+{"level":"info","message":"POST /upload"}
+{"level":"info","message":"GET /retrieve"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"POST /upload"}
+{"level":"info","message":"GET /retrieve"}
+{"level":"info","message":"Server running on port 3001"}
+{"level":"info","message":"POST /upload"}
+{"level":"info","message":"GET /retrieve"}
+
+
+================================================================================
+File: backend/config/aws.js
+Size: 488 B
+================================================================================
+
+const { CognitoIdentityProviderClient } = require('@aws-sdk/client-cognito-identity-provider');
+const { S3Client } = require('@aws-sdk/client-s3');
+
+const cognitoClient = new CognitoIdentityProviderClient({
+  region: process.env.AWS_REGION
+});
+
+const s3Client = new S3Client({
+  region: process.env.S3_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+  }
+});
+
+module.exports = {
+  cognitoClient,
+  s3Client
+};
+
+================================================================================
+File: backend/error.log
+Size: 0 B
+================================================================================
+
+
+
+================================================================================
+File: backend/middleware/auth.js
+Size: 552 B
+================================================================================
+
+const jwt = require('jsonwebtoken');
+
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: true, message: 'Access token required' });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(401).json({ error: true, message: 'Invalid or expired token' });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+module.exports = { authenticateToken };
+
+================================================================================
+File: backend/middleware/upload.js
+Size: 976 B
+================================================================================
+
+const multer = require('multer');
+const multerS3 = require('multer-s3');
+const { s3Client } = require('../config/aws');
+const { v4: uuidv4 } = require('uuid');
+
+const upload = multer({
+  storage: multerS3({
+    s3: s3Client,
+    bucket: process.env.S3_BUCKET_NAME,
+    metadata: function (req, file, cb) {
+      cb(null, { fieldName: file.fieldname });
+    },
+    key: function (req, file, cb) {
+      const userId = req.user.userId;
+      const fileExtension = file.originalname.split('.').pop();
+      const fileName = `${userId}/${uuidv4()}.${fileExtension}`;
+      cb(null, fileName);
+    }
+  }),
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, and WebP are allowed.'));
+    }
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB
+  }
+});
+
+module.exports = upload;
+
+================================================================================
+File: backend/package.json
+Size: 883 B
+================================================================================
+
+{
+  "name": "ai-image-processor-backend",
+  "version": "1.0.0",
+  "description": "Backend for AI Image Processor with AWS integration",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "init-db": "node scripts/init-db.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.450.0",
+    "@aws-sdk/client-s3": "^3.450.0",
+    "@aws-sdk/s3-request-presigner": "^3.450.0",
+    "@imgly/background-removal-node": "^1.4.5",
+    "buffer": "^6.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "knex": "^3.0.1",
+    "multer": "^1.4.5-lts.1",
+    "multer-s3": "^3.0.1",
+    "mysql2": "^3.6.5",
+    "sharp": "^0.34.4",
+    "sqlite3": "^5.1.6",
+    "uuid": "^9.0.1",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
+
+
+================================================================================
+File: backend/routes/images.js
+Size: 3.8 kB
+================================================================================
+
+const express = require('express');
+const router = express.Router();
+const { authenticateToken } = require('../middleware/auth');
+const databaseService = require('../services/database');
+
+// ===== DEV-ONLY BEGIN =====
+const s3Service = process.env.NODE_ENV === 'development'
+  ? require('../services/localStorage')
+  : require('../services/s3');
+// ===== DEV-ONLY END =====
+
+// Get all user images - matching MyBackgroundEraser's /images endpoint
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    // ===== DEV-ONLY BEGIN =====
+    if (process.env.NODE_ENV === 'development') {
+      // In dev mode, return mock data or check local files
+      const fs = require('fs');
+      const path = require('path');
+      const uploadsDir = path.join(__dirname, '../../uploads');
+      
+      try {
+        const files = fs.readdirSync(uploadsDir);
+        const userFiles = files.filter(f => f.includes('processed'));
+        
+        if (userFiles.length === 0) {
+          return res.status(204).send(); // No content
+        }
+        
+        // Create mock image data matching the expected format
+        const images = userFiles.map((file, index) => ({
+          imageId: index + 1,
+          imageName: file.replace('_processed_', '_').replace('.png', ''),
+          timestamp: new Date().toISOString(),
+          processedS3Url: file
+        }));
+        
+        return res.json(images);
+      } catch (err) {
+        console.log('Dev mode: No uploads directory or files');
+        return res.status(204).send();
+      }
+    }
+    // ===== DEV-ONLY END =====
+    
+    const images = await databaseService.getUserImages(userId);
+    
+    if (!images || images.length === 0) {
+      return res.status(204).send(); // No content, matching the reference
+    }
+    
+    res.json(images);
+  } catch (error) {
+    console.error('Error fetching images:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Failed to fetch images'
+    });
+  }
+});
+
+// Get single image by filename - matching MyBackgroundEraser's /retrieve endpoint
+router.get('/retrieve', authenticateToken, async (req, res) => {
+  try {
+    const { filename } = req.query;
+    const userId = req.user.userId;
+    
+    if (!filename) {
+      return res.status(400).json({
+        error: true,
+        message: 'Filename query parameter is required'
+      });
+    }
+
+    // ===== DEV-ONLY BEGIN =====
+    if (process.env.NODE_ENV === 'development') {
+      const fs = require('fs');
+      const path = require('path');
+      
+      // Check different possible file locations
+      const possibleFiles = [
+        path.join(__dirname, '../../uploads', filename),
+        path.join(__dirname, '../../uploads', `${userId}_processed_${filename}.png`),
+        path.join(__dirname, '../../uploads', filename.replace(/\//g, '_')),
+        path.join(__dirname, '../../uploads', 'debug_output.png') // Fallback to debug output
+      ];
+      
+      for (const filePath of possibleFiles) {
+        if (fs.existsSync(filePath)) {
+          console.log(`Serving file: ${filePath}`);
+          res.setHeader('Content-Type', 'image/png');
+          return res.sendFile(filePath);
+        }
+      }
+      
+      console.log('File not found, tried:', possibleFiles);
+      return res.status(404).json({
+        error: true,
+        message: 'Image not found'
+      });
+    }
+    // ===== DEV-ONLY END =====
+
+    // Production: Get image stream from S3
+    const imageStream = await s3Service.getImageStream(filename);
+    res.setHeader('Content-Type', 'image/png');
+    imageStream.pipe(res);
+  } catch (error) {
+    console.error('Retrieve error:', error);
+    res.status(404).json({
+      error: true,
+      message: 'Image not found'
+    });
+  }
+});
+
+module.exports = router;
+
+================================================================================
+File: backend/routes/logs.js
+Size: 545 B
+================================================================================
+
+const express = require('express');
+const router = express.Router();
+const { authenticateToken } = require('../middleware/auth');
+const databaseService = require('../services/database');
+
+// Get user activity logs
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const logs = await databaseService.getUserLogs(userId);
+    
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({
+      error: true,
+      message: 'Failed to fetch logs'
+    });
+  }
+});
+
+module.exports = router;
+
+================================================================================
+File: backend/routes/upload.js
+Size: 3.48 kB
+================================================================================
+
+const express = require('express');
+const router = express.Router();
+const { authenticateToken } = require('../middleware/auth');
+
+// ===== DEV-ONLY BEGIN =====
+const s3Service = process.env.NODE_ENV === 'development'
+  ? require('../services/localStorage')
+  : require('../services/s3');
+// ===== DEV-ONLY END =====
+// Production: const s3Service = require('../services/s3');
+
+const databaseService = require('../services/database');
+const imageProcessorService = require('../services/imageProcessor');
+const multer = require('multer');
+const { v4: uuidv4 } = require('uuid');
+
+// Configure multer for memory storage
+const upload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type'));
+    }
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB
+  }
+});
+
+// Upload and process image
+router.post('/', authenticateToken, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        error: true,
+        message: 'No image file provided'
+      });
+    }
+
+    const userId = req.user.userId;
+    const imageName = req.body.imageName || req.file.originalname;
+    const imageId = uuidv4();
+
+    // ===== DEV-ONLY BEGIN =====
+    console.log(`Processing image: ${imageName}, Type: ${req.file.mimetype}, Size: ${req.file.buffer.length} bytes`);
+    // ===== DEV-ONLY END =====
+
+    // Process the image to remove background
+    const processedImage = await imageProcessorService.processImage(req.file.buffer, 'png', req.file.mimetype);
+
+    // Upload original to S3
+    const originalKey = `${userId}/original_${imageId}.${req.file.mimetype.split('/')[1]}`;
+    await s3Service.uploadProcessedImage(originalKey, req.file.buffer, req.file.mimetype);
+
+    // Upload processed to S3
+    const processedKey = `${userId}/processed_${imageId}.png`;
+    await s3Service.uploadProcessedImage(processedKey, processedImage.buffer, 'image/png');
+
+    // ===== DEV-ONLY BEGIN =====
+    let dbImageId = imageId;
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Dev mode: Skipping full database save, using mock ID');
+      // Create minimal DB entry for dev
+      try {
+        dbImageId = await databaseService.saveImageData(
+          userId,
+          imageName,
+          originalKey,
+          processedKey
+        );
+      } catch (dbError) {
+        console.log('DB save failed in dev, continuing:', dbError.message);
+        dbImageId = imageId; // Use generated ID as fallback
+      }
+    } else {
+    // ===== DEV-ONLY END =====
+      // Save to database
+      dbImageId = await databaseService.saveImageData(
+        userId,
+        imageName,
+        originalKey,
+        processedKey
+      );
+
+      // Log the activity
+      await databaseService.saveLog(
+        userId,
+        `Processed image: ${imageName}`,
+        dbImageId
+      );
+    // ===== DEV-ONLY BEGIN =====
+    }
+    // ===== DEV-ONLY END =====
+
+    res.json({
+      error: false,
+      message: 'Image processed successfully',
+      imageId: dbImageId,
+      processedUrl: processedKey
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({
+      error: true,
+      message: error.message || 'Failed to process image'
+    });
+  }
+});
+
+module.exports = router;
+
+================================================================================
+File: backend/routes/users.js
+Size: 3.93 kB
+================================================================================
+
+const express = require('express');
+const router = express.Router();
+const jwt = require('jsonwebtoken');
+// const cognitoService = require('../services/cognito');
+const cognitoService = process.env.NODE_ENV === 'development' // testing
+  ? require('../services/cognito')
+  : require('../services/mockCognito');
+
+const databaseService = require('../services/database');
+
+// Register new user
+router.post('/register', async (req, res) => {
+  try {
+    const { username, email, password, firstName, lastName } = req.body;
+    
+    // Validate input
+    if (!username || !email || !password || !firstName || !lastName) {
+      return res.status(400).json({
+        error: true,
+        message: 'All fields are required'
+      });
+    }
+
+    // Sign up with Cognito
+    const result = await cognitoService.signUp(username, password, email, firstName, lastName);
+    
+    // Log registration
+    await databaseService.saveLog(result.userSub, 'User registered');
+    
+    res.json({
+      error: false,
+      message: 'Registration successful. Please check your email for confirmation code.'
+    });
+  } catch (error) {
+    res.status(400).json({
+      error: true,
+      message: error.message
+    });
+  }
+});
+
+// Confirm email
+router.post('/confirm', async (req, res) => {
+  try {
+    const { username, confirmationCode } = req.body;
+    
+    await cognitoService.confirmSignUp(username, confirmationCode);
+    
+    res.json({
+      error: false,
+      message: 'Email confirmed successfully'
+    });
+  } catch (error) {
+    res.status(400).json({
+      error: true,
+      message: error.message
+    });
+  }
+});
+
+// Login
+router.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+     // Local dev admin bypass
+    if (process.env.NODE_ENV === 'development') {
+      // Check for admin credentials or your email with the admin password
+      if ((username === 'admin' && password === 'admin12345678') || 
+          (username.includes('@') && password === 'admin12345678')) {
+        const token = jwt.sign(
+          { 
+            userId: 'local_admin',
+            username: username === 'admin' ? 'admin' : username,
+            email: username === 'admin' ? 'admin@local.dev' : username
+          },
+          process.env.JWT_SECRET,
+          { expiresIn: process.env.JWT_EXPIRY }
+        );
+        
+        // Log successful login
+        await databaseService.saveLog('local_admin', `Dev login: ${username}`);
+        
+        return res.json({
+          error: false,
+          token: token,
+          expiresIn: 604800 // 7 days in seconds
+        });
+      }
+    }
+    
+    // Authenticate with Cognito
+    const authResult = await cognitoService.signIn(username, password);
+    
+    // Parse the ID token to get user info
+    const idTokenPayload = JSON.parse(
+      Buffer.from(authResult.idToken.split('.')[1], 'base64').toString()
+    );
+    
+    // Create JWT token for our app
+    const token = jwt.sign(
+      { 
+        userId: idTokenPayload.sub,
+        username: username,
+        email: idTokenPayload.email
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRY }
+    );
+    
+    // Log successful login
+    await databaseService.saveLog(idTokenPayload.sub, 'User logged in');
+    
+    res.json({
+      error: false,
+      token: token,
+      expiresIn: 604800 // 7 days in seconds
+    });
+  } catch (error) {
+    res.status(401).json({
+      error: true,
+      message: 'Invalid credentials'
+    });
+  }
+});
+
+// Resend confirmation code
+router.post('/resend-confirmation-code', async (req, res) => {
+  try {
+    const { username } = req.body;
+    
+    await cognitoService.resendConfirmationCode(username);
+    
+    res.json({
+      error: false,
+      message: 'Confirmation code resent successfully'
+    });
+  } catch (error) {
+    res.status(400).json({
+      error: true,
+      message: error.message
+    });
+  }
+});
+
+module.exports = router;
+
+================================================================================
+File: backend/scripts/init-db.js
+Size: 433 B
+================================================================================
+
+require('dotenv').config();
+const databaseService = require('../services/database');
+
+async function initializeDatabase() {
+  try {
+    console.log('Initializing database tables...');
+    await databaseService.createTables();
+    console.log('Database tables created successfully!');
+    process.exit(0);
+  } catch (error) {
+    console.error('Failed to initialize database:', error);
+    process.exit(1);
+  }
+}
+initializeDatabase();
+
+================================================================================
+File: backend/server.js
+Size: 2.15 kB
+================================================================================
+
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const winston = require('winston');
+
+// Import routes
+const userRoutes = require('./routes/users');
+const uploadRoutes = require('./routes/upload');
+const imageRoutes = require('./routes/images');
+const logRoutes = require('./routes/logs');
+
+// Initialize express app
+const app = express();
+
+// Configure logger
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.simple()
+    }),
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
+});
+
+// Middleware
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:8080',
+  credentials: true
+}));
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  logger.info(`${req.method} ${req.path}`);
+  next();
+});
+
+// Routes
+app.use('/users', userRoutes);
+app.use('/upload', uploadRoutes);
+app.use('/images', imageRoutes);
+app.use('/logs', logRoutes);
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Serve local images in development
+if (process.env.NODE_ENV === 'development') {
+  app.get('/local-image/:key', (req, res) => {
+    const fs = require('fs');
+    const path = require('path');
+    const filePath = path.join(__dirname, '../uploads', req.params.key.replace(/\//g, '_'));
+    if (fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      res.status(404).send('Image not found');
+    } 
+  });
+}
+// Error handling middleware
+app.use((err, req, res, next) => {
+  logger.error(err.stack);
+  res.status(err.status || 500).json({
+    error: true,
+    message: err.message || 'Internal server error'
+  });
+});
+
+// Start server
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  logger.info(`Server running on port ${PORT}`);
+  console.log(`Server is running on http://localhost:${PORT}`);
+});
+
+================================================================================
+File: backend/services/cognito.js
+Size: 3.23 kB
+================================================================================
+
+const { cognitoClient } = require('../config/aws');
+const {
+  SignUpCommand,
+  ConfirmSignUpCommand,
+  InitiateAuthCommand,
+  ResendConfirmationCodeCommand
+} = require('@aws-sdk/client-cognito-identity-provider');
+const crypto = require('crypto');
+
+class CognitoService {
+  async signUp(username, password, email, firstName, lastName) {
+    
+    // Local dev bypass
+    if (process.env.NODE_ENV === 'development') {
+      return { success: true, userSub: 'local_' + username };
+    }
+    const params = {
+      ClientId: process.env.COGNITO_CLIENT_ID,
+      Username: username,
+      Password: password,
+      UserAttributes: [
+        { Name: 'email', Value: email },
+        { Name: 'given_name', Value: firstName },
+        { Name: 'family_name', Value: lastName }
+      ]
+    };
+
+    try {
+      const command = new SignUpCommand(params);
+      const result = await cognitoClient.send(command);
+      return { success: true, userSub: result.UserSub };
+    } catch (error) {
+      throw new Error(error.message || 'Sign up failed');
+    }
+  }
+
+  async confirmSignUp(username, confirmationCode) {
+
+    // Local dev bypass
+    if (process.env.NODE_ENV === 'development') {
+      return { success: true };
+    }
+    const params = {
+      ClientId: process.env.COGNITO_CLIENT_ID,
+      Username: username,
+      ConfirmationCode: confirmationCode
+    };
+
+    try {
+      const command = new ConfirmSignUpCommand(params);
+      await cognitoClient.send(command);
+      return { success: true };
+    } catch (error) {
+      throw new Error(error.message || 'Confirmation failed');
+    }
+  }
+
+  async signIn(username, password) {
+
+    // Local dev hardcoded admin user
+    if (process.env.NODE_ENV === 'development') {
+      if (username === 'admin' && password === 'admin12345678') {
+        return {
+          success: true,
+          idToken: 'local_admin_id_token',
+          accessToken: 'local_admin_access_token',
+          refreshToken: 'local_admin_refresh_token'
+        };
+      }
+      throw new Error('Invalid credentials');
+    }
+
+    const params = {
+      AuthFlow: 'USER_PASSWORD_AUTH',
+      ClientId: process.env.COGNITO_CLIENT_ID,
+      AuthParameters: {
+        USERNAME: username,
+        PASSWORD: password
+      }
+    };
+
+    try {
+      const command = new InitiateAuthCommand(params);
+      const result = await cognitoClient.send(command);
+      return {
+        success: true,
+        idToken: result.AuthenticationResult.IdToken,
+        accessToken: result.AuthenticationResult.AccessToken,
+        refreshToken: result.AuthenticationResult.RefreshToken
+      };
+    } catch (error) {
+      throw new Error(error.message || 'Sign in failed');
+    }
+  }
+
+  async resendConfirmationCode(username) {
+
+    // Local dev bypass
+    if (process.env.NODE_ENV === 'development') {
+      return { success: true };
+    }
+    
+    const params = {
+      ClientId: process.env.COGNITO_CLIENT_ID,
+      Username: username
+    };
+
+    try {
+      const command = new ResendConfirmationCodeCommand(params);
+      await cognitoClient.send(command);
+      return { success: true };
+    } catch (error) {
+      throw new Error(error.message || 'Failed to resend code');
+    }
+  }
+}
+
+module.exports = new CognitoService();
+
+================================================================================
+File: backend/services/database.js
+Size: 2.78 kB
+================================================================================
+
+// const knex = require('knex')({
+//   client: 'mysql2',
+//   connection: {
+//     host: process.env.DB_HOST,
+//     port: process.env.DB_PORT,
+//     user: process.env.DB_USER,
+//     password: process.env.DB_PASSWORD,
+//     database: process.env.DB_NAME
+//   },
+//   pool: {
+//     min: 2,
+//     max: 10
+//   }
+// });
+
+// Use SQLite for testing 
+
+const knex = require('knex')({
+  client: process.env.DB_HOST ? 'mysql2' : 'sqlite3',
+  connection: process.env.DB_HOST ? {
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME
+  } : {
+    filename: './dev.sqlite3'
+  },
+  useNullAsDefault: true,
+  pool: {
+    min: 2,
+    max: 10
+  }
+});
+
+class DatabaseService {
+  async createTables() {
+    // Create image-data table
+    if (!(await knex.schema.hasTable('image_data'))) {
+      await knex.schema.createTable('image_data', table => {
+        table.increments('imageId').primary();
+        table.string('userId').notNullable();
+        table.string('imageName').notNullable();
+        table.string('originalS3Url').notNullable();
+        table.string('processedS3Url').notNullable();
+        table.timestamp('timestamp').defaultTo(knex.fn.now());
+        table.index('userId');
+      });
+    }
+
+    // Create logs table
+    if (!(await knex.schema.hasTable('logs'))) {
+      await knex.schema.createTable('logs', table => {
+        table.increments('logId').primary();
+        table.string('userId').notNullable();
+        table.integer('imageId').unsigned();
+        table.string('description').notNullable();
+        table.timestamp('timestamp').defaultTo(knex.fn.now());
+        table.foreign('imageId').references('imageId').inTable('image_data');
+        table.index('userId');
+      });
+    }
+  }
+
+  async saveImageData(userId, imageName, originalS3Url, processedS3Url) {
+    const [imageId] = await knex('image_data').insert({
+      userId,
+      imageName,
+      originalS3Url,
+      processedS3Url
+    });
+    return imageId;
+  }
+
+  async saveLog(userId, description, imageId = null) {
+    await knex('logs').insert({
+      userId,
+      description,
+      imageId
+    });
+  }
+
+  async getUserImages(userId) {
+    return await knex('image_data')
+      .where('userId', userId)
+      .orderBy('timestamp', 'desc')
+      .select('imageId', 'imageName', 'timestamp', 'processedS3Url');
+  }
+
+  async getUserLogs(userId) {
+    return await knex('logs')
+      .where('userId', userId)
+      .orderBy('timestamp', 'desc')
+      .select('logId', 'description', 'imageId', 'timestamp');
+  }
+
+  async getImageById(imageId, userId) {
+    return await knex('image_data')
+      .where({ imageId, userId })
+      .first();
+  }
+}
+module.exports = new DatabaseService();
+
+================================================================================
+File: backend/services/imageProcessor.js
+Size: 2.58 kB
+================================================================================
+
+const fs = require('fs').promises;
+const path = require('path');
+
+class ImageProcessorService {
+  constructor() {
+    this.initialized = false;
+    this.removeBackground = null;
+  }
+
+  async initialize() {
+    if (this.initialized) return;
+    
+    try {
+      // Dynamically import the ESM module
+      const bgRemoval = await import('@imgly/background-removal-node');
+      this.removeBackground = bgRemoval.removeBackground;
+      this.initialized = true;
+      console.log('Background removal library loaded');
+    } catch (error) {
+      console.error('Failed to load background removal library:', error);
+      throw error;
+    }
+  }
+
+  async processImage(inputBuffer, outputFormat = 'png', mimeType) {
+    try {
+      // Ensure initialization
+      await this.initialize();
+      
+      // ===== DEV-ONLY BEGIN =====
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`Processing buffer: ${inputBuffer.length} bytes, MIME: ${mimeType}`);
+      }
+      // ===== DEV-ONLY END =====
+      
+      // The library needs a Blob, not a Buffer or Uint8Array
+      // Create a Blob from the buffer with proper MIME type
+      const { Blob } = require('buffer');
+      const blob = new Blob([inputBuffer], { type: mimeType || 'image/png' });
+      
+      // Process with the library - it handles Blob directly
+      const resultBlob = await this.removeBackground(blob);
+      
+      // Convert result blob back to buffer
+      const arrayBuffer = await resultBlob.arrayBuffer();
+      const resultBuffer = Buffer.from(arrayBuffer);
+      
+      return {
+        buffer: resultBuffer,
+        mimeType: `image/${outputFormat}`
+      };
+    } catch (error) {
+      console.error('Image processing error:', error);
+      
+      // ===== DEV-ONLY BEGIN =====
+      // Fallback: use sharp for simple background processing
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Attempting sharp fallback...');
+        try {
+          const sharp = require('sharp');
+          const processedBuffer = await sharp(inputBuffer)
+            .ensureAlpha()
+            .png()
+            .toBuffer();
+          
+          console.log('Sharp fallback successful');
+          return {
+            buffer: processedBuffer,
+            mimeType: 'image/png'
+          };
+        } catch (sharpError) {
+          console.error('Sharp fallback also failed:', sharpError);
+        }
+      }
+      // ===== DEV-ONLY END =====
+      
+      throw new Error('Failed to process image: ' + error.message);
+    }
+  }
+}
+
+module.exports = new ImageProcessorService();
+
+================================================================================
+File: backend/services/localStorage.js
+Size: 1.24 kB
+================================================================================
+
+const fs = require('fs').promises;
+const path = require('path');
+
+class LocalStorageService {
+  constructor() {
+    this.uploadsDir = path.join(__dirname, '../../uploads');
+    this.ensureDirectory();
+  }
+
+  async ensureDirectory() {
+    try {
+      await fs.mkdir(this.uploadsDir, { recursive: true });
+    } catch (err) {
+      console.error('Error creating uploads directory:', err);
+    }
+  }
+
+  async uploadProcessedImage(key, buffer, contentType) {
+    const filePath = path.join(this.uploadsDir, key.replace(/\//g, '_'));
+    await fs.writeFile(filePath, buffer);
+    return { success: true, key };
+  }
+
+  async getImageStream(key) {
+    const filePath = path.join(this.uploadsDir, key.replace(/\//g, '_'));
+    const buffer = await fs.readFile(filePath);
+    // Return a mock stream-like object
+    return {
+      pipe: (res) => res.send(buffer)
+    };
+  }
+
+  async listUserImages(userId) {
+    try {
+      const files = await fs.readdir(this.uploadsDir);
+      return files
+        .filter(f => f.startsWith(userId))
+        .map(f => ({ Key: f }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getSignedImageUrl(key) {
+    return `http://localhost:3001/local-image/${key}`;
+  }
+}
+
+module.exports = new LocalStorageService();
+
+================================================================================
+File: backend/services/mockCognito.js
+Size: 1.24 kB
+================================================================================
+
+// Mock Cognito for local development
+const users = new Map();
+
+class MockCognitoService {
+  async signUp(username, password, email, firstName, lastName) {
+    if (users.has(username)) {
+      throw new Error('User already exists');
+    }
+    const userSub = 'mock_' + Date.now();
+    users.set(username, {
+      password,
+      email,
+      firstName,
+      lastName,
+      userSub,
+      confirmed: false
+    });
+    return { success: true, userSub };
+  }
+
+  async confirmSignUp(username, confirmationCode) {
+    if (confirmationCode === '123456') {
+      const user = users.get(username);
+      if (user) {
+        user.confirmed = true;
+        return { success: true };
+      }
+    }
+    throw new Error('Invalid confirmation code');
+  }
+
+  async signIn(username, password) {
+    const user = users.get(username);
+    if (user && user.password === password && user.confirmed) {
+      return {
+        success: true,
+        idToken: 'mock_id_token_' + Date.now(),
+        accessToken: 'mock_access_token',
+        refreshToken: 'mock_refresh_token'
+      };
+    }
+    throw new Error('Invalid credentials');
+  }
+
+  async resendConfirmationCode(username) {
+    return { success: true };
+  }
+}
+
+module.exports = new MockCognitoService();
+
+================================================================================
+File: backend/services/s3.js
+Size: 1.82 kB
+================================================================================
+
+const { s3Client } = require('../config/aws');
+const { GetObjectCommand, PutObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+
+class S3Service {
+  async uploadProcessedImage(key, buffer, contentType) {
+    const params = {
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType
+    };
+
+    try {
+      const command = new PutObjectCommand(params);
+      await s3Client.send(command);
+      return { success: true, key };
+    } catch (error) {
+      throw new Error('Failed to upload to S3: ' + error.message);
+    }
+  }
+
+  async getSignedImageUrl(key) {
+    const params = {
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: key
+    };
+
+    try {
+      const command = new GetObjectCommand(params);
+      const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+      return url;
+    } catch (error) {
+      throw new Error('Failed to get signed URL: ' + error.message);
+    }
+  }
+
+  async listUserImages(userId) {
+    const params = {
+      Bucket: process.env.S3_BUCKET_NAME,
+      Prefix: `${userId}/`
+    };
+
+    try {
+      const command = new ListObjectsV2Command(params);
+      const result = await s3Client.send(command);
+      return result.Contents || [];
+    } catch (error) {
+      throw new Error('Failed to list images: ' + error.message);
+    }
+  }
+
+  async getImageStream(key) {
+    const params = {
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: key
+    };
+
+    try {
+      const command = new GetObjectCommand(params);
+      const response = await s3Client.send(command);
+      return response.Body;
+    } catch (error) {
+      throw new Error('Failed to get image: ' + error.message);
+    }
+  }
+}
+
+module.exports = new S3Service();
+
+================================================================================
+File: frontend/app.html
+Size: 6.3 kB
+================================================================================
+
+<!-- File: frontend/app.html -->
+<!-- Directory: your-image-app/frontend/ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - AI Image Processor</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="#dashboard" class="logo">
+                🎨 AI Image Processor
+            </a>
+            <ul class="nav-links">
+                <li><a href="#dashboard" class="nav-link active" data-page="dashboard">Dashboard</a></li>
+                <li><a href="#upload" class="nav-link" data-page="upload">Upload</a></li>
+                <li><a href="#gallery" class="nav-link" data-page="gallery">Gallery</a></li>
+                <li><a href="#logs" class="nav-link" data-page="logs">Logs</a></li>
+                <li><a href="#" onclick="logout()">Logout</a></li>
+            </ul>
+            <div class="user-info">
+                <span id="username"></span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Dashboard Page -->
+        <div id="dashboard" class="page active">
+            <div class="card">
+                <h1>Welcome to Your Dashboard</h1>
+                <p>Start processing images or view your gallery.</p>
+                
+                <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2rem; margin-top: 2rem;">
+                    <div class="stat-card" style="text-align: center; padding: 2rem; background: var(--light-bg); border-radius: 10px;">
+                        <h3 id="totalImages" style="font-size: 2rem; color: var(--primary-color);">0</h3>
+                        <p>Total Images</p>
+                    </div>
+                    <div class="stat-card" style="text-align: center; padding: 2rem; background: var(--light-bg); border-radius: 10px;">
+                        <h3 id="processedToday" style="font-size: 2rem; color: var(--primary-color);">0</h3>
+                        <p>Processed Today</p>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 2rem; display: flex; gap: 1rem;">
+                    <button class="btn btn-primary btn-lg" onclick="navigateTo('upload')">
+                        📤 Upload New Image
+                    </button>
+                    <button class="btn btn-secondary btn-lg" onclick="navigateTo('gallery')">
+                        🖼️ View Gallery
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Page -->
+        <div id="upload" class="page">
+            <div class="card">
+                <h1>Upload Image for Processing</h1>
+                
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📤</div>
+                    <p>Drag & drop your image here or click to browse</p>
+                    <p class="text-muted">Supports JPG, PNG, WebP (Max 10MB)</p>
+                    <input type="file" id="fileInput" class="file-input" accept="image/*" style="display: none;">
+                </div>
+                
+                <div class="form-group">
+                    <label for="imageName" class="form-label">Image Name (optional)</label>
+                    <input type="text" id="imageName" class="form-control" placeholder="Enter a custom name for your image">
+                </div>
+                
+                <button id="processBtn" class="btn btn-primary btn-block btn-lg" disabled onclick="processImage()">
+                    🚀 Process Image
+                </button>
+                
+                <div id="uploadAlert" class="alert mt-3"></div>
+                
+                <div id="uploadLoading" class="spinner-container" style="display: none;">
+                    <div class="spinner"></div>
+                    <span class="loading-text">Processing your image...</span>
+                </div>
+                
+                <div id="previewContainer" class="preview-grid mt-3"></div>
+            </div>
+        </div>
+
+        <!-- Gallery Page -->
+        <div id="gallery" class="page">
+            <div class="card">
+                <h1>Your Image Gallery</h1>
+                <button class="btn btn-primary mb-3" onclick="loadGallery()">🔄 Refresh</button>
+                
+                <div id="galleryLoading" class="spinner-container" style="display: none;">
+                    <div class="spinner"></div>
+                    <span class="loading-text">Loading images...</span>
+                </div>
+                
+                <div id="galleryGrid" class="gallery-grid"></div>
+                <div id="galleryAlert" class="alert mt-3"></div>
+            </div>
+        </div>
+
+        <!-- Logs Page -->
+        <div id="logs" class="page">
+            <div class="card">
+                <h1>Activity Logs</h1>
+                <button class="btn btn-primary mb-3" onclick="loadLogs()">🔄 Refresh</button>
+                
+                <div id="logsLoading" class="spinner-container" style="display: none;">
+                    <div class="spinner"></div>
+                    <span class="loading-text">Loading logs...</span>
+                </div>
+                
+                <div style="overflow-x: auto;">
+                    <table class="logs-table" id="logsTable" style="width: 100%; display: none;">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Description</th>
+                                <th>Image ID</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody"></tbody>
+                    </table>
+                </div>
+                <div id="logsAlert" class="alert mt-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
+
+================================================================================
+File: frontend/confirm-email.html
+Size: 6.86 kB
+================================================================================
+
+<!-- File: frontend/confirm-email.html -->
+<!-- Directory: your-image-app/frontend/ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirm Email - AI Image Processor</title>
+    <link rel="stylesheet" href="css/common.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="logo">
+                🎨 AI Image Processor
+            </a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="login.html">Login</a></li>
+                <li><a href="signup.html">Sign Up</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Confirmation Container -->
+    <div class="auth-container">
+        <div class="auth-card">
+            <h2>Confirm Your Email</h2>
+            <p class="auth-subtitle">We've sent a confirmation code to your email</p>
+            
+            <form id="confirmForm">
+                <div class="form-group">
+                    <label for="username" class="form-label">Username</label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        class="form-control" 
+                        placeholder="Enter your username"
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirmationCode" class="form-label">Confirmation Code</label>
+                    <input 
+                        type="text" 
+                        id="confirmationCode" 
+                        class="form-control" 
+                        placeholder="Enter 6-digit code"
+                        required
+                        maxlength="10"
+                    >
+                    <small class="text-muted">Check your email for the confirmation code</small>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-block btn-lg">
+                    Confirm Email
+                </button>
+                
+                <button type="button" class="btn btn-secondary btn-block mt-2" onclick="resendCode()">
+                    Resend Code
+                </button>
+            </form>
+            
+            <div class="auth-links">
+                <a href="login.html">Back to Login</a>
+            </div>
+            
+            <div id="alert" class="alert"></div>
+        </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999;">
+        <div class="spinner-container" style="height:100%;">
+            <div class="spinner"></div>
+            <span class="loading-text" style="color:white;">Confirming...</span>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script>
+        // Pre-fill username if coming from signup
+        window.addEventListener('DOMContentLoaded', () => {
+            const pendingUsername = localStorage.getItem('pendingUsername');
+            if (pendingUsername) {
+                document.getElementById('username').value = pendingUsername;
+            }
+        });
+        
+        document.getElementById('confirmForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const confirmationCode = document.getElementById('confirmationCode').value;
+            
+            // Show loading
+            document.getElementById('loadingOverlay').style.display = 'block';
+            
+            try {
+                const response = await fetch(`${CONFIG.API_HOST}/users/confirm`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        confirmationCode: confirmationCode
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showAlert(data.message || 'Confirmation failed', 'error');
+                } else {
+                    // Clear pending username
+                    localStorage.removeItem('pendingUsername');
+                    
+                    showAlert('Email confirmed successfully! Redirecting to login...', 'success');
+                    
+                    // Redirect to login
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('Confirmation error:', error);
+                showAlert('An error occurred. Please try again.', 'error');
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        });
+        
+        async function resendCode() {
+            const username = document.getElementById('username').value;
+            
+            if (!username) {
+                showAlert('Please enter your username', 'error');
+                return;
+            }
+            
+            document.getElementById('loadingOverlay').style.display = 'block';
+            
+            try {
+                const response = await fetch(`${CONFIG.API_HOST}/users/resend-confirmation-code`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username: username })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showAlert(data.message || 'Failed to resend code', 'error');
+                } else {
+                    showAlert('Confirmation code resent! Check your email.', 'success');
+                }
+            } catch (error) {
+                console.error('Resend error:', error);
+                showAlert('An error occurred. Please try again.', 'error');
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        }
+        
+        function showAlert(message, type) {
+            const alert = document.getElementById('alert');
+            alert.className = `alert alert-${type} show`;
+            alert.textContent = message;
+        }
+    </script>
+</body>
+</html>
+
+================================================================================
+File: frontend/css/app.css
+Size: 2.49 kB
+================================================================================
+
+/* File: frontend/css/app.css */
+/* Directory: your-image-app/frontend/css/ */
+
+/* Page Management */
+.page {
+    display: none;
+}
+
+.page.active {
+    display: block;
+}
+
+/* Upload Area */
+.upload-area {
+    border: 3px dashed var(--border-color);
+    border-radius: 10px;
+    padding: 3rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: var(--light-bg);
+    margin: 2rem 0;
+}
+
+.upload-area:hover {
+    border-color: var(--primary-color);
+    background: #f8f9ff;
+}
+
+.upload-area.dragover {
+    border-color: var(--primary-color);
+    background: #f0f0ff;
+    transform: scale(1.02);
+}
+
+.upload-area.has-file {
+    border-color: var(--success-color);
+    background: #d4edda;
+}
+
+.upload-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.file-input {
+    display: none;
+}
+
+/* Preview Grid */
+.preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.preview-item {
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+.preview-item img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.preview-label {
+    background: var(--light-bg);
+    padding: 1rem;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* Gallery Grid */
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.gallery-item {
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    transition: transform 0.3s, box-shadow 0.3s;
+    cursor: pointer;
+}
+
+.gallery-item:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-lg);
+}
+
+.gallery-item img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+}
+
+.gallery-item-info {
+    padding: 1rem;
+}
+
+.gallery-item-name {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.gallery-item-date {
+    color: var(--gray-text);
+    font-size: 0.9rem;
+}
+
+/* Logs Table */
+.logs-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.logs-table th {
+    background: var(--light-bg);
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.logs-table td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.logs-table tr:hover {
+    background: var(--light-bg);
+}
+
+/* Navigation active state */
+.nav-link.active {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+================================================================================
+File: frontend/css/common.css
+Size: 7.71 kB
+================================================================================
+
+/* Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary-color: #6B73FF;
+    --primary-dark: #000DFF;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #17a2b8;
+    --light-bg: #f5f7fa;
+    --dark-text: #333;
+    --gray-text: #666;
+    --border-color: #ddd;
+    --shadow: 0 2px 10px rgba(0,0,0,0.1);
+    --shadow-lg: 0 10px 30px rgba(0,0,0,0.15);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background: var(--light-bg);
+    color: var(--dark-text);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+/* Navigation Bar */
+.navbar {
+    background: white;
+    box-shadow: var(--shadow);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.nav-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--dark-text);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.logo:hover {
+    color: var(--primary-color);
+}
+
+.nav-links {
+    display: flex;
+    gap: 2rem;
+    list-style: none;
+    align-items: center;
+}
+
+.nav-links a {
+    color: var(--gray-text);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.3s;
+}
+
+.nav-links a:hover,
+.nav-links a.active {
+    color: var(--primary-color);
+}
+
+/* Container */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+/* Cards */
+.card {
+    background: white;
+    border-radius: 10px;
+    padding: 2rem;
+    box-shadow: var(--shadow);
+    margin-bottom: 2rem;
+}
+
+.card-header {
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.card-title {
+    font-size: 1.5rem;
+    color: var(--dark-text);
+}
+
+/* Forms */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--dark-text);
+    font-weight: 500;
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid var(--border-color);
+    border-radius: 5px;
+    font-size: 1rem;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(107, 115, 255, 0.1);
+}
+
+.form-control:disabled {
+    background: var(--light-bg);
+    cursor: not-allowed;
+}
+
+/* Buttons */
+.btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 5px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: inline-block;
+    text-align: center;
+    text-decoration: none;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(107, 115, 255, 0.4);
+}
+
+.btn-secondary {
+    background: var(--gray-text);
+    color: white;
+}
+
+.btn-success {
+    background: var(--success-color);
+    color: white;
+}
+
+.btn-danger {
+    background: var(--danger-color);
+    color: white;
+}
+
+.btn-outline {
+    background: transparent;
+    border: 2px solid var(--primary-color);
+    color: var(--primary-color);
+}
+
+.btn-outline:hover {
+    background: var(--primary-color);
+    color: white;
+}
+
+.btn-block {
+    width: 100%;
+    display: block;
+}
+
+.btn-lg {
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+}
+
+/* Alerts */
+.alert {
+    padding: 1rem;
+    border-radius: 5px;
+    margin: 1rem 0;
+    display: none;
+}
+
+.alert.show {
+    display: block;
+}
+
+.alert-success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.alert-error,
+.alert-danger {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.alert-info {
+    background: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+.alert-warning {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+/* Loading Spinner */
+.spinner-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid var(--primary-color);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+    margin-left: 1rem;
+    color: var(--gray-text);
+}
+
+/* Utilities */
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+
+.text-primary { color: var(--primary-color); }
+.text-success { color: var(--success-color); }
+.text-danger { color: var(--danger-color); }
+.text-muted { color: var(--gray-text); }
+
+.mt-1 { margin-top: 0.5rem; }
+.mt-2 { margin-top: 1rem; }
+.mt-3 { margin-top: 1.5rem; }
+.mt-4 { margin-top: 2rem; }
+
+.mb-1 { margin-bottom: 0.5rem; }
+.mb-2 { margin-bottom: 1rem; }
+.mb-3 { margin-bottom: 1.5rem; }
+.mb-4 { margin-bottom: 2rem; }
+
+.p-1 { padding: 0.5rem; }
+.p-2 { padding: 1rem; }
+.p-3 { padding: 1.5rem; }
+.p-4 { padding: 2rem; }
+
+.d-none { display: none; }
+.d-block { display: block; }
+.d-flex { display: flex; }
+.d-grid { display: grid; }
+
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.align-center { align-items: center; }
+
+.gap-1 { gap: 0.5rem; }
+.gap-2 { gap: 1rem; }
+.gap-3 { gap: 1.5rem; }
+.gap-4 { gap: 2rem; }
+
+/* Auth Pages Specific */
+.auth-container {
+    min-height: calc(100vh - 70px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+}
+
+.auth-card {
+    background: white;
+    border-radius: 10px;
+    padding: 2rem;
+    box-shadow: var(--shadow-lg);
+    width: 100%;
+    max-width: 400px;
+}
+
+.auth-card h2 {
+    text-align: center;
+    margin-bottom: 0.5rem;
+    color: var(--dark-text);
+}
+
+.auth-subtitle {
+    text-align: center;
+    color: var(--gray-text);
+    margin-bottom: 2rem;
+}
+
+.divider {
+    text-align: center;
+    margin: 1.5rem 0;
+    position: relative;
+}
+
+.divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--border-color);
+}
+
+.divider span {
+    background: white;
+    padding: 0 1rem;
+    position: relative;
+    color: var(--gray-text);
+    font-size: 0.9rem;
+}
+
+.auth-links {
+    text-align: center;
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+}
+
+.auth-links a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.auth-links a:hover {
+    text-decoration: underline;
+}
+
+/* Social Login Buttons */
+.btn-google {
+    background: white;
+    color: var(--dark-text);
+    border: 2px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.btn-google:hover {
+    background: var(--light-bg);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .nav-container {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .nav-links {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .container {
+        padding: 1rem;
+    }
+    
+    .card {
+        padding: 1rem;
+    }
+}
+
+/* Hide elements initially for auth state */
+.auth-required {
+    display: none;
+}
+
+.auth-required.authenticated {
+    display: block;
+}
+
+.no-auth-required.authenticated {
+    display: none;
+}
+
+================================================================================
+File: frontend/index.html
+Size: 12.18 kB
+================================================================================
+
+<!-- File: frontend/index.html -->
+<!-- Directory: your-image-app/frontend/ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image Processor - Remove Backgrounds & More</title>
+    <link rel="stylesheet" href="css/common.css">
+    <style>
+        /* Homepage specific styles */
+        .hero {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 4rem 2rem;
+            text-align: center;
+            min-height: 60vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .hero-content {
+            max-width: 800px;
+        }
+        
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            animation: fadeInUp 0.8s ease;
+        }
+        
+        .hero p {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            opacity: 0.95;
+            animation: fadeInUp 0.8s ease 0.2s both;
+        }
+        
+        .cta-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            animation: fadeInUp 0.8s ease 0.4s both;
+        }
+        
+        .btn-hero {
+            padding: 1rem 2.5rem;
+            font-size: 1.1rem;
+            border-radius: 50px;
+        }
+        
+        .btn-hero-primary {
+            background: white;
+            color: var(--primary-color);
+        }
+        
+        .btn-hero-primary:hover {
+            background: #f8f9fa;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .btn-hero-outline {
+            background: transparent;
+            color: white;
+            border: 2px solid white;
+        }
+        
+        .btn-hero-outline:hover {
+            background: rgba(255,255,255,0.1);
+            transform: translateY(-2px);
+        }
+        
+        .features {
+            padding: 4rem 2rem;
+            background: white;
+        }
+        
+        .features-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .features h2 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--dark-text);
+        }
+        
+        .features-subtitle {
+            text-align: center;
+            color: var(--gray-text);
+            margin-bottom: 3rem;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+        
+        .feature-card {
+            text-align: center;
+            padding: 2rem;
+            border-radius: 10px;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            display: inline-block;
+            animation: bounce 2s infinite;
+        }
+        
+        .feature-card:nth-child(2) .feature-icon {
+            animation-delay: 0.2s;
+        }
+        
+        .feature-card:nth-child(3) .feature-icon {
+            animation-delay: 0.4s;
+        }
+        
+        .feature-card h3 {
+            color: var(--dark-text);
+            margin-bottom: 0.5rem;
+        }
+        
+        .feature-card p {
+            color: var(--gray-text);
+            line-height: 1.6;
+        }
+        
+        .stats {
+            background: var(--light-bg);
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+        
+        .stats-grid {
+            max-width: 800px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+        }
+        
+        .stat-item h3 {
+            font-size: 2.5rem;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-item p {
+            color: var(--gray-text);
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+            
+            .cta-buttons {
+                flex-direction: column;
+                width: 100%;
+            }
+            
+            .btn-hero {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="logo">
+                🎨 AI Image Processor
+            </a>
+            <ul class="nav-links">
+                <li><a href="index.html" class="active">Home</a></li>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#how-it-works">How it Works</a></li>
+                <li class="no-auth-required"><a href="login.html">Login</a></li>
+                <li class="no-auth-required"><a href="signup.html" class="btn btn-primary">Get Started</a></li>
+                <li class="auth-required"><a href="app.html">Dashboard</a></li>
+                <li class="auth-required"><a href="#" onclick="logout()">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1>Transform Your Images with AI</h1>
+            <p>Remove backgrounds, enhance quality, and apply stunning effects to your images in seconds. Powered by cutting-edge AI technology.</p>
+            <div class="cta-buttons">
+                <a href="signup.html" class="btn btn-hero btn-hero-primary">Start Free Trial</a>
+                <a href="#features" class="btn btn-hero btn-hero-outline">Learn More</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="features-container">
+            <h2>Powerful Image Processing Features</h2>
+            <p class="features-subtitle">Everything you need to create stunning visuals</p>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h3>Background Removal</h3>
+                    <p>AI-powered background removal with perfect edge detection. Works great for products, portraits, and any subject.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Lightning Fast</h3>
+                    <p>Process images in seconds, not minutes. Our cloud infrastructure ensures rapid processing at any scale.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">☁️</div>
+                    <h3>Cloud Storage</h3>
+                    <p>All your images are securely stored in the cloud. Access them anytime, anywhere, from any device.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Activity Tracking</h3>
+                    <p>Keep track of all your processing activities with detailed logs and image history.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Secure & Private</h3>
+                    <p>Enterprise-grade security with AWS. Your images are encrypted and only accessible by you.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🚀</div>
+                    <h3>Batch Processing</h3>
+                    <p>Upload and process multiple images at once. Perfect for e-commerce and professional photographers.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How it Works Section -->
+    <section class="features" id="how-it-works" style="background: var(--light-bg);">
+        <div class="features-container">
+            <h2>How It Works</h2>
+            <p class="features-subtitle">Get started in 3 simple steps</p>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">1️⃣</div>
+                    <h3>Upload Your Image</h3>
+                    <p>Drag and drop or click to upload. Supports JPG, PNG, and WebP formats up to 10MB.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">2️⃣</div>
+                    <h3>AI Processing</h3>
+                    <p>Our AI analyzes and processes your image automatically, removing backgrounds with precision.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">3️⃣</div>
+                    <h3>Download Result</h3>
+                    <p>Get your processed image instantly. Download in high quality with transparent background.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats">
+        <div class="stats-grid">
+            <div class="stat-item">
+                <h3>10,000+</h3>
+                <p>Images Processed</p>
+            </div>
+            <div class="stat-item">
+                <h3>99.9%</h3>
+                <p>Uptime</p>
+            </div>
+            <div class="stat-item">
+                <h3>< 3s</h3>
+                <p>Average Processing Time</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer style="background: var(--dark-text); color: white; padding: 2rem; text-align: center;">
+        <p>&copy; 2024 AI Image Processor. Built with AWS Cloud Services.</p>
+    </footer>
+
+    <script src="js/config.js"></script>
+    <script>
+        // Check authentication status
+        function checkAuthStatus() {
+            const token = localStorage.getItem(CONFIG.APP.TOKEN_KEY);
+            const authRequired = document.querySelectorAll('.auth-required');
+            const noAuthRequired = document.querySelectorAll('.no-auth-required');
+            
+            if (token) {
+                authRequired.forEach(el => el.classList.add('authenticated'));
+                noAuthRequired.forEach(el => el.classList.add('authenticated'));
+            }
+        }
+        
+        // Simple logout function
+        function logout() {
+            localStorage.removeItem(CONFIG.APP.TOKEN_KEY);
+            localStorage.removeItem(CONFIG.APP.USERNAME_KEY);
+            localStorage.removeItem(CONFIG.APP.EXPIRY_KEY);
+            window.location.href = 'index.html';
+        }
+        
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+        
+        // Check auth on load
+        checkAuthStatus();
+    </script>
+</body>
+</html>
+
+================================================================================
+File: frontend/js/api.js
+Size: 1.71 kB
+================================================================================
+
+// File: frontend/js/api.js
+// Directory: your-image-app/frontend/js/
+
+// API Helper Functions
+
+async function apiCall(endpoint, options = {}) {
+    const defaultOptions = {
+        headers: {
+            ...getAuthHeaders(),
+            ...options.headers
+        }
+    };
+    
+    // Don't set Content-Type for FormData
+    if (!(options.body instanceof FormData)) {
+        defaultOptions.headers['Content-Type'] = 'application/json';
+    }
+    
+    try {
+        const response = await fetch(`${CONFIG.API_HOST}${endpoint}`, {
+            ...defaultOptions,
+            ...options
+        });
+        
+        if (response.status === 401) {
+            // Unauthorized, redirect to login
+            redirectToLogin();
+            return;
+        }
+        
+        return response;
+    } catch (error) {
+        console.error('API call error:', error);
+        throw error;
+    }
+}
+
+
+
+// API Functions for core features
+const API = {
+    // Upload and process image
+    uploadImage: async (file, imageName) => {
+        const formData = new FormData();
+        formData.append('image', file);
+        if (imageName) {
+            formData.append('imageName', imageName);
+        }
+        
+        return await apiCall('/upload', {
+            method: 'POST',
+            body: formData
+        });
+    },
+    
+    // Get all images - fixed endpoint
+    getImages: async () => {
+        return await apiCall('/images');
+    },
+
+    // Get single image - fixed to match backend
+    getImage: async (filename) => {
+        return await apiCall(`/images/retrieve?filename=${encodeURIComponent(filename)}`);
+    },
+    
+    // Get logs
+    getLogs: async () => {
+        return await apiCall('/logs');
+    }
+};
+
+================================================================================
+File: frontend/js/app.js
+Size: 18.26 kB
+================================================================================
+
+// File: frontend/js/app.js
+// Directory: your-image-app/frontend/js/
+
+// Main Application JavaScript
+// Handles all functionality for the authenticated app section
+
+// Global variables
+let selectedFile = null;
+let currentImages = [];
+let currentLogs = [];
+
+// Initialize app on load
+document.addEventListener('DOMContentLoaded', function() {
+    // Check authentication
+    if (!isAuthenticated()) {
+        redirectToLogin();
+        return;
+    }
+    
+    // Set username in UI
+    const username = getUserName();
+    document.getElementById('username').textContent = username;
+    
+    // Initialize navigation
+    initializeNavigation();
+    
+    // Initialize upload area
+    initializeUploadArea();
+    
+    // Load dashboard data
+    loadDashboardData();
+    
+    // Handle hash navigation
+    handleHashNavigation();
+});
+
+// Navigation System (similar to React Router)
+function initializeNavigation() {
+    // Handle nav link clicks
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const page = link.getAttribute('data-page');
+            navigateTo(page);
+        });
+    });
+}
+
+function navigateTo(page) {
+    // Update URL hash
+    window.location.hash = page;
+    
+    // Hide all pages
+    document.querySelectorAll('.page').forEach(p => {
+        p.classList.remove('active');
+    });
+    
+    // Show selected page
+    const pageElement = document.getElementById(page);
+    if (pageElement) {
+        pageElement.classList.add('active');
+    }
+    
+    // Update nav active state
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+        if (link.getAttribute('data-page') === page) {
+            link.classList.add('active');
+        }
+    });
+    
+    // Load page-specific data
+    switch(page) {
+        case 'dashboard':
+            loadDashboardData();
+            break;
+        case 'gallery':
+            loadGallery();
+            break;
+        case 'logs':
+            loadLogs();
+            break;
+    }
+}
+
+function handleHashNavigation() {
+    const hash = window.location.hash.slice(1) || 'dashboard';
+    navigateTo(hash);
+    
+    // Listen for hash changes
+    window.addEventListener('hashchange', () => {
+        const newHash = window.location.hash.slice(1) || 'dashboard';
+        navigateTo(newHash);
+    });
+}
+
+// Logout function (matching Remove My Background app)
+function logout() {
+    clearAuthData();
+    window.location.href = 'index.html';
+}
+
+// Dashboard Functions
+async function loadDashboardData() {
+    try {
+        // Load images to get count
+        const response = await API.getImages();
+        if (response && response.ok) {
+            const images = await response.json();
+            document.getElementById('totalImages').textContent = images.length || 0;
+            
+            // Count today's images
+            const today = new Date().toDateString();
+            const todayCount = images.filter(img => {
+                return new Date(img.timestamp || img.createdAt).toDateString() === today;
+            }).length;
+            document.getElementById('processedToday').textContent = todayCount;
+        }
+    } catch (error) {
+        console.error('Error loading dashboard data:', error);
+    }
+}
+
+// Upload Functionality (matching Remove My Background app's Request.js)
+function initializeUploadArea() {
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    
+    if (!uploadArea || !fileInput) return;
+    
+    // Click to upload
+    uploadArea.addEventListener('click', () => {
+        fileInput.click();
+    });
+    
+    // File selection
+    fileInput.addEventListener('change', (e) => {
+        handleFileSelect(e.target.files[0]);
+    });
+    
+    // Drag and drop
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        handleFileSelect(e.dataTransfer.files[0]);
+    });
+}
+
+function handleFileSelect(file) {
+    if (!file) return;
+    
+    // Validate file type
+    if (!CONFIG.APP.ALLOWED_TYPES.includes(file.type)) {
+        showAlert('uploadAlert', 'Please select a valid image file (JPG, PNG, or WebP)', 'error');
+        return;
+    }
+    
+    // Validate file size
+    if (file.size > CONFIG.APP.MAX_FILE_SIZE) {
+        showAlert('uploadAlert', 'File size must be less than 10MB', 'error');
+        return;
+    }
+    
+    selectedFile = file;
+    
+    // Update upload area UI
+    const uploadArea = document.getElementById('uploadArea');
+    uploadArea.classList.add('has-file');
+    uploadArea.innerHTML = `
+        <div class="upload-icon">✅</div>
+        <p><strong>${file.name}</strong></p>
+        <p class="text-muted">${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+    `;
+    
+    // Enable process button
+    document.getElementById('processBtn').disabled = false;
+    
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        document.getElementById('previewContainer').innerHTML = `
+            <div class="preview-item">
+                <div class="preview-label">Original Image</div>
+                <img src="${e.target.result}" alt="Original">
+            </div>
+        `;
+    };
+    reader.readAsDataURL(file);
+}
+
+async function processImage() {
+    if (!selectedFile) {
+        showAlert('uploadAlert', 'Please select an image first', 'error');
+        return;
+    }
+    
+    const processBtn = document.getElementById('processBtn');
+    const loading = document.getElementById('uploadLoading');
+    const imageName = document.getElementById('imageName').value || selectedFile.name.split('.')[0];
+    
+    // Show loading state
+    processBtn.disabled = true;
+    loading.style.display = 'flex';
+    hideAlert('uploadAlert');
+    
+    try {
+        // Upload and process image
+        const response = await API.uploadImage(selectedFile, imageName);
+        
+        if (response && response.ok) {
+            const data = await response.json();
+            
+            // Add success message
+            showAlert('uploadAlert', 'Image processed successfully!', 'success');
+            
+            // Try to retrieve and show the processed image
+            setTimeout(async () => {
+                try {
+                    const imageResponse = await API.getImage(imageName);
+                    if (imageResponse && imageResponse.ok) {
+                        const blob = await imageResponse.blob();
+                        const url = URL.createObjectURL(blob);
+                        
+                        // Add processed image to preview
+                        document.getElementById('previewContainer').innerHTML += `
+                            <div class="preview-item">
+                                <div class="preview-label">Processed (Background Removed)</div>
+                                <img src="${url}" alt="Processed">
+                                <button class="btn btn-success btn-block mt-2" onclick="downloadImage('${url}', '${imageName}')">
+                                    Download Processed Image
+                                </button>
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    console.error('Error retrieving processed image:', error);
+                }
+            }, 1000);
+            
+            // Log activity (matching Remove My Background app)
+            console.log('Image uploaded successfully:', data.message);
+            
+        } else {
+            const errorData = await response.json();
+            showAlert('uploadAlert', errorData.message || 'Failed to process image', 'error');
+        }
+    } catch (error) {
+        console.error('Upload error:', error);
+        showAlert('uploadAlert', 'An error occurred while processing your image', 'error');
+    } finally {
+        processBtn.disabled = false;
+        loading.style.display = 'none';
+    }
+}
+
+// Gallery Functions (matching Remove My Background app's Images.js)
+async function loadGallery() {
+    const loading = document.getElementById('galleryLoading');
+    const grid = document.getElementById('galleryGrid');
+    const alert = document.getElementById('galleryAlert');
+    
+    loading.style.display = 'flex';
+    hideAlert('galleryAlert');
+    
+    try {
+        const response = await API.getImages();
+        
+        if (response && response.ok) {
+            const images = await response.json();
+            currentImages = images;
+            
+            if (images.length === 0) {
+                grid.innerHTML = `
+                    <div class="text-center" style="grid-column: 1/-1;">
+                        <p class="text-muted">No images yet. Start by uploading your first image!</p>
+                        <button class="btn btn-primary mt-2" onclick="navigateTo('upload')">
+                            Upload Image
+                        </button>
+                    </div>
+                `;
+            } else {
+                // Sort images by date (newest first)
+                images.sort((a, b) => new Date(b.timestamp || b.createdAt) - new Date(a.timestamp || a.createdAt));
+                
+                grid.innerHTML = images.map(img => {
+                    // Use processedS3Url if available, otherwise construct filename
+                    const imageUrl = img.processedS3Url 
+                        ? `${CONFIG.API_HOST}/images/retrieve?filename=${encodeURIComponent(img.processedS3Url)}`
+                        : `${CONFIG.API_HOST}/images/retrieve?filename=${encodeURIComponent(img.imageName)}`;
+                    
+                    return `
+                        <div class="gallery-item" onclick="viewImage('${img.processedS3Url || img.imageName}')">
+                            <img src="${imageUrl}" 
+                                 alt="${img.imageName}"
+                                 onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRTBFMEUwIi8+Cjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTk5OTkiPkltYWdlIE5vdCBGb3VuZDwvdGV4dD4KPC9zdmc+'"
+                            >
+                            <div class="gallery-item-info">
+                                <div class="gallery-item-name">${img.imageName}</div>
+                                <div class="gallery-item-date">${formatDate(img.timestamp || img.createdAt)}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        } else if (response && response.status === 204) {
+            // No content - this is the expected response for no images
+            grid.innerHTML = `
+                <div class="text-center" style="grid-column: 1/-1;">
+                    <p class="text-muted">No images found. Upload your first image!</p>
+                    <button class="btn btn-primary mt-2" onclick="navigateTo('upload')">
+                        Upload Image
+                    </button>
+                </div>
+            `;
+        } else {
+            showAlert('galleryAlert', 'Failed to load images', 'error');
+        }
+    } catch (error) {
+        console.error('Gallery error:', error);
+        showAlert('galleryAlert', 'An error occurred while loading images', 'error');
+    } finally {
+        loading.style.display = 'none';
+    }
+}
+
+function viewImage(filename) {
+    const imageUrl = `${CONFIG.API_HOST}/images/retrieve?filename=${encodeURIComponent(filename)}`;
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+    `;
+    
+    modal.innerHTML = `
+        <div style="background: white; border-radius: 10px; padding: 2rem; max-width: 90%; max-height: 90%; overflow: auto;">
+            <h2>${filename}</h2>
+            <img src="${imageUrl}" style="max-width: 100%; height: auto; display: block; margin: 1rem 0;">
+            <div style="display: flex; gap: 1rem;">
+                <button class="btn btn-success" onclick="downloadImage('${imageUrl}', '${filename}')">
+                    Download Image
+                </button>
+                <button class="btn btn-secondary" onclick="this.closest('div[style]').parentElement.remove()">
+                    Close
+                </button>
+            </div>
+        </div>
+    `;
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+    
+    document.body.appendChild(modal);
+}
+
+function downloadImage(url, filename) {
+    // Create download link
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename + '_processed.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Logs Functions (matching Remove My Background app's Logs.js)
+async function loadLogs() {
+    const loading = document.getElementById('logsLoading');
+    const table = document.getElementById('logsTable');
+    const tbody = document.getElementById('logsTableBody');
+    
+    loading.style.display = 'flex';
+    table.style.display = 'none';
+    hideAlert('logsAlert');
+    
+    try {
+        const response = await API.getLogs();
+        
+        if (response && response.ok) {
+            const logs = await response.json();
+            currentLogs = logs;
+            
+            if (logs.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="3" class="text-center text-muted">No activity logs yet</td>
+                    </tr>
+                `;
+            } else {
+                // Sort logs by date (newest first)
+                logs.sort((a, b) => new Date(b.timestamp || b.createdAt) - new Date(a.timestamp || a.createdAt));
+                
+                tbody.innerHTML = logs.map(log => `
+                    <tr>
+                        <td>${formatDateTime(log.timestamp || log.createdAt)}</td>
+                        <td>${log.description}</td>
+                        <td>${log.imageId || '-'}</td>
+                    </tr>
+                `).join('');
+            }
+            
+            table.style.display = 'table';
+        } else if (response && response.status === 404) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="3" class="text-center text-muted">No logs found</td>
+                </tr>
+            `;
+            table.style.display = 'table';
+        } else {
+            showAlert('logsAlert', 'Failed to load logs', 'error');
+        }
+    } catch (error) {
+        console.error('Logs error:', error);
+        showAlert('logsAlert', 'An error occurred while loading logs', 'error');
+    } finally {
+        loading.style.display = 'none';
+    }
+}
+
+// Utility Functions
+function showAlert(alertId, message, type) {
+    const alert = document.getElementById(alertId);
+    if (alert) {
+        alert.className = `alert alert-${type} show`;
+        alert.textContent = message;
+        
+        // Auto-hide success messages
+        if (type === 'success') {
+            setTimeout(() => {
+                hideAlert(alertId);
+            }, 5000);
+        }
+    }
+}
+
+function hideAlert(alertId) {
+    const alert = document.getElementById(alertId);
+    if (alert) {
+        alert.classList.remove('show');
+    }
+}
+
+function formatDate(dateString) {
+    if (!dateString) return 'Unknown';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    });
+}
+
+function formatDateTime(dateString) {
+    if (!dateString) return 'Unknown';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+// Reset upload area
+function resetUploadArea() {
+    selectedFile = null;
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const processBtn = document.getElementById('processBtn');
+    const previewContainer = document.getElementById('previewContainer');
+    const imageName = document.getElementById('imageName');
+    
+    if (uploadArea) {
+        uploadArea.classList.remove('has-file');
+        uploadArea.innerHTML = `
+            <div class="upload-icon">📤</div>
+            <p>Drag & drop your image here or click to browse</p>
+            <p class="text-muted">Supports JPG, PNG, WebP (Max 10MB)</p>
+            <input type="file" id="fileInput" class="file-input" accept="image/*" style="display: none;">
+        `;
+        // Re-initialize upload area after resetting
+        initializeUploadArea();
+    }
+    
+    if (fileInput) fileInput.value = '';
+    if (processBtn) processBtn.disabled = true;
+    if (previewContainer) previewContainer.innerHTML = '';
+    if (imageName) imageName.value = '';
+    
+    hideAlert('uploadAlert');
+}
+
+// Auto-refresh gallery and logs when navigating to them
+window.addEventListener('hashchange', () => {
+    const hash = window.location.hash.slice(1);
+    if (hash === 'gallery') {
+        loadGallery();
+    } else if (hash === 'logs') {
+        loadLogs();
+    }
+});
+
+// Periodically check auth status
+setInterval(() => {
+    if (!isAuthenticated()) {
+        redirectToLogin();
+    }
+}, 60000); // Check every minute
+
+================================================================================
+File: frontend/js/auth.js
+Size: 1.25 kB
+================================================================================
+
+// File: frontend/js/auth.js
+// Directory: your-image-app/frontend/js/
+
+// Authentication helper functions
+
+function isAuthenticated() {
+    const token = localStorage.getItem(CONFIG.APP.TOKEN_KEY);
+    const expiry = localStorage.getItem(CONFIG.APP.EXPIRY_KEY);
+    
+    if (!token) return false;
+    
+    if (expiry) {
+        const expiryDate = new Date(expiry);
+        if (expiryDate <= new Date()) {
+            // Token expired, clear storage
+            clearAuthData();
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+function clearAuthData() {
+    localStorage.removeItem(CONFIG.APP.TOKEN_KEY);
+    localStorage.removeItem(CONFIG.APP.USERNAME_KEY);
+    localStorage.removeItem(CONFIG.APP.EXPIRY_KEY);
+}
+
+function getAuthHeaders() {
+    const token = localStorage.getItem(CONFIG.APP.TOKEN_KEY);
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
+function redirectToLogin() {
+    clearAuthData();
+    window.location.href = 'login.html';
+}
+
+function getUserName() {
+    return localStorage.getItem(CONFIG.APP.USERNAME_KEY) || '';
+}
+
+// Auto-redirect if not authenticated on protected pages
+if (window.location.pathname.includes('app.html')) {
+    if (!isAuthenticated()) {
+        redirectToLogin();
+    }
+}
+
+================================================================================
+File: frontend/js/config.js
+Size: 873 B
+================================================================================
+
+// Configuration for the application
+const CONFIG = {
+    // API endpoint - will be updated when backend is ready
+    API_HOST: 'http://localhost:3001',
+    
+    // AWS Cognito settings - TO BE CONFIGURED
+    COGNITO: {
+        REGION: '',  // Will be set when we configure Cognito
+        USER_POOL_ID: '',
+        CLIENT_ID: ''
+    },
+    
+    // Application settings
+    APP: {
+        NAME: 'AI Image Processor',
+        MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
+        ALLOWED_TYPES: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+        TOKEN_KEY: 'authToken',
+        USERNAME_KEY: 'userName',
+        EXPIRY_KEY: 'expiryTime'
+    }
+};
+
+// Check if running in production
+if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    CONFIG.API_HOST = 'https://your-api-domain.com:3001'; // Will update with actual domain
+}
+
+================================================================================
+File: frontend/login.html
+Size: 5.8 kB
+================================================================================
+
+<!-- File: frontend/login.html -->
+<!-- Directory: your-image-app/frontend/ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - AI Image Processor</title>
+    <link rel="stylesheet" href="css/common.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="logo">
+                🎨 AI Image Processor
+            </a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="login.html" class="active">Login</a></li>
+                <li><a href="signup.html">Sign Up</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Login Container -->
+    <div class="auth-container">
+        <div class="auth-card">
+            <h2>Welcome Back</h2>
+            <p class="auth-subtitle">Sign in to continue processing images</p>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="email" class="form-label">Email</label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        class="form-control" 
+                        placeholder="Enter your email"
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="password" class="form-label">Password</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        class="form-control" 
+                        placeholder="Enter your password"
+                        required
+                    >
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-block btn-lg">
+                    Sign In
+                </button>
+            </form>
+            
+            <!-- Will add Google sign-in later -->
+            <!-- <div class="divider">
+                <span>OR</span>
+            </div>
+            
+            <button class="btn btn-google btn-lg" onclick="signInWithGoogle()">
+                Sign in with Google
+            </button> -->
+            
+            <div class="auth-links">
+                <a href="forgot-password.html">Forgot password?</a>
+                <span> • </span>
+                <a href="signup.html">Don't have an account? Sign up</a>
+            </div>
+            
+            <div id="alert" class="alert"></div>
+        </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999;">
+        <div class="spinner-container" style="height:100%;">
+            <div class="spinner"></div>
+            <span class="loading-text" style="color:white;">Signing in...</span>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            // Show loading
+            document.getElementById('loadingOverlay').style.display = 'block';
+            
+            try {
+                const response = await fetch(`${CONFIG.API_HOST}/users/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: email,
+                        password: password
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showAlert(data.message || 'Login failed', 'error');
+                } else {
+                    // Store authentication data
+                    localStorage.setItem(CONFIG.APP.TOKEN_KEY, data.token);
+                    localStorage.setItem(CONFIG.APP.USERNAME_KEY, email);
+                    
+                    // Calculate and store expiry time
+                    if (data.expiresIn) {
+                        const expiryTime = new Date();
+                        expiryTime.setSeconds(expiryTime.getSeconds() + data.expiresIn);
+                        localStorage.setItem(CONFIG.APP.EXPIRY_KEY, expiryTime.toISOString());
+                    }
+                    
+                    showAlert('Login successful! Redirecting...', 'success');
+                    
+                    // Redirect to main app
+                    setTimeout(() => {
+                        window.location.href = 'app.html';
+                    }, 1000);
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showAlert('An error occurred. Please try again.', 'error');
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        });
+        
+        function showAlert(message, type) {
+            const alert = document.getElementById('alert');
+            alert.className = `alert alert-${type} show`;
+            alert.textContent = message;
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    alert.classList.remove('show');
+                }, 5000);
+            }
+        }
+    </script>
+</body>
+</html>
+
+================================================================================
+File: frontend/signup.html
+Size: 6.47 kB
+================================================================================
+
+<!-- File: frontend/signup.html -->
+<!-- Directory: your-image-app/frontend/ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - AI Image Processor</title>
+    <link rel="stylesheet" href="css/common.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="logo">
+                🎨 AI Image Processor
+            </a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="login.html">Login</a></li>
+                <li><a href="signup.html" class="active">Sign Up</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Sign Up Container -->
+    <div class="auth-container">
+        <div class="auth-card">
+            <h2>Create Account</h2>
+            <p class="auth-subtitle">Start processing images in seconds</p>
+            
+            <form id="signupForm">
+                <div class="form-group">
+                    <label for="username" class="form-label">Username</label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        class="form-control" 
+                        placeholder="Choose a username"
+                        required
+                        minlength="3"
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="email" class="form-label">Email</label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        class="form-control" 
+                        placeholder="Enter your email"
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="password" class="form-label">Password</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        class="form-control" 
+                        placeholder="Create a password (min 8 characters)"
+                        required
+                        minlength="8"
+                    >
+                    <small class="text-muted">Must be at least 8 characters with numbers and letters</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="firstName" class="form-label">First Name</label>
+                    <input 
+                        type="text" 
+                        id="firstName" 
+                        class="form-control" 
+                        placeholder="Enter your first name"
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="lastName" class="form-label">Last Name</label>
+                    <input 
+                        type="text" 
+                        id="lastName" 
+                        class="form-control" 
+                        placeholder="Enter your last name"
+                        required
+                    >
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-block btn-lg">
+                    Create Account
+                </button>
+            </form>
+            
+            <div class="auth-links">
+                <a href="login.html">Already have an account? Sign in</a>
+            </div>
+            
+            <div id="alert" class="alert"></div>
+        </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999;">
+        <div class="spinner-container" style="height:100%;">
+            <div class="spinner"></div>
+            <span class="loading-text" style="color:white;">Creating account...</span>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script>
+        document.getElementById('signupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const userData = {
+                username: document.getElementById('username').value,
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value,
+                firstName: document.getElementById('firstName').value,
+                lastName: document.getElementById('lastName').value
+            };
+            
+            // Show loading
+            document.getElementById('loadingOverlay').style.display = 'block';
+            
+            try {
+                const response = await fetch(`${CONFIG.API_HOST}/users/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(userData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showAlert(data.message || 'Registration failed', 'error');
+                } else {
+                    // Store username for confirmation page
+                    localStorage.setItem('pendingUsername', userData.username);
+                    
+                    showAlert('Account created! Check your email for confirmation code.', 'success');
+                    
+                    // Redirect to confirmation page
+                    setTimeout(() => {
+                        window.location.href = 'confirm-email.html';
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('Signup error:', error);
+                showAlert('An error occurred. Please try again.', 'error');
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        });
+        
+        function showAlert(message, type) {
+            const alert = document.getElementById('alert');
+            alert.className = `alert alert-${type} show`;
+            alert.textContent = message;
+        }
+    </script>
+</body>
+</html>

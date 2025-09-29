@@ -1,0 +1,369 @@
+<!-- File: frontend/index.html -->
+<!-- Directory: your-image-app/frontend/ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image Processor - Remove Backgrounds & More</title>
+    <link rel="stylesheet" href="css/common.css">
+    <style>
+        /* Homepage specific styles */
+        .hero {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 4rem 2rem;
+            text-align: center;
+            min-height: 60vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .hero-content {
+            max-width: 800px;
+        }
+        
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            animation: fadeInUp 0.8s ease;
+        }
+        
+        .hero p {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            opacity: 0.95;
+            animation: fadeInUp 0.8s ease 0.2s both;
+        }
+        
+        .cta-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            animation: fadeInUp 0.8s ease 0.4s both;
+        }
+        
+        .btn-hero {
+            padding: 1rem 2.5rem;
+            font-size: 1.1rem;
+            border-radius: 50px;
+        }
+        
+        .btn-hero-primary {
+            background: white;
+            color: var(--primary-color);
+        }
+        
+        .btn-hero-primary:hover {
+            background: #f8f9fa;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .btn-hero-outline {
+            background: transparent;
+            color: white;
+            border: 2px solid white;
+        }
+        
+        .btn-hero-outline:hover {
+            background: rgba(255,255,255,0.1);
+            transform: translateY(-2px);
+        }
+        
+        .features {
+            padding: 4rem 2rem;
+            background: white;
+        }
+        
+        .features-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .features h2 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--dark-text);
+        }
+        
+        .features-subtitle {
+            text-align: center;
+            color: var(--gray-text);
+            margin-bottom: 3rem;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+        
+        .feature-card {
+            text-align: center;
+            padding: 2rem;
+            border-radius: 10px;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            display: inline-block;
+            animation: bounce 2s infinite;
+        }
+        
+        .feature-card:nth-child(2) .feature-icon {
+            animation-delay: 0.2s;
+        }
+        
+        .feature-card:nth-child(3) .feature-icon {
+            animation-delay: 0.4s;
+        }
+        
+        .feature-card h3 {
+            color: var(--dark-text);
+            margin-bottom: 0.5rem;
+        }
+        
+        .feature-card p {
+            color: var(--gray-text);
+            line-height: 1.6;
+        }
+        
+        .stats {
+            background: var(--light-bg);
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+        
+        .stats-grid {
+            max-width: 800px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+        }
+        
+        .stat-item h3 {
+            font-size: 2.5rem;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-item p {
+            color: var(--gray-text);
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+            
+            .cta-buttons {
+                flex-direction: column;
+                width: 100%;
+            }
+            
+            .btn-hero {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="logo">
+                🎨 AI Image Processor
+            </a>
+            <ul class="nav-links">
+                <li><a href="index.html" class="active">Home</a></li>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#how-it-works">How it Works</a></li>
+                <li class="no-auth-required"><a href="login.html">Login</a></li>
+                <li class="no-auth-required"><a href="signup.html" class="btn btn-primary">Get Started</a></li>
+                <li class="auth-required"><a href="app.html">Dashboard</a></li>
+                <li class="auth-required"><a href="#" onclick="logout()">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1>Transform Your Images with AI</h1>
+            <p>Remove backgrounds, enhance quality, and apply stunning effects to your images in seconds. Powered by cutting-edge AI technology.</p>
+            <div class="cta-buttons">
+                <a href="signup.html" class="btn btn-hero btn-hero-primary">Start Free Trial</a>
+                <a href="#features" class="btn btn-hero btn-hero-outline">Learn More</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="features-container">
+            <h2>Powerful Image Processing Features</h2>
+            <p class="features-subtitle">Everything you need to create stunning visuals</p>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h3>Background Removal</h3>
+                    <p>AI-powered background removal with perfect edge detection. Works great for products, portraits, and any subject.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Lightning Fast</h3>
+                    <p>Process images in seconds, not minutes. Our cloud infrastructure ensures rapid processing at any scale.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">☁️</div>
+                    <h3>Cloud Storage</h3>
+                    <p>All your images are securely stored in the cloud. Access them anytime, anywhere, from any device.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Activity Tracking</h3>
+                    <p>Keep track of all your processing activities with detailed logs and image history.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Secure & Private</h3>
+                    <p>Enterprise-grade security with AWS. Your images are encrypted and only accessible by you.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🚀</div>
+                    <h3>Batch Processing</h3>
+                    <p>Upload and process multiple images at once. Perfect for e-commerce and professional photographers.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How it Works Section -->
+    <section class="features" id="how-it-works" style="background: var(--light-bg);">
+        <div class="features-container">
+            <h2>How It Works</h2>
+            <p class="features-subtitle">Get started in 3 simple steps</p>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">1️⃣</div>
+                    <h3>Upload Your Image</h3>
+                    <p>Drag and drop or click to upload. Supports JPG, PNG, and WebP formats up to 10MB.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">2️⃣</div>
+                    <h3>AI Processing</h3>
+                    <p>Our AI analyzes and processes your image automatically, removing backgrounds with precision.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">3️⃣</div>
+                    <h3>Download Result</h3>
+                    <p>Get your processed image instantly. Download in high quality with transparent background.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats">
+        <div class="stats-grid">
+            <div class="stat-item">
+                <h3>10,000+</h3>
+                <p>Images Processed</p>
+            </div>
+            <div class="stat-item">
+                <h3>99.9%</h3>
+                <p>Uptime</p>
+            </div>
+            <div class="stat-item">
+                <h3>< 3s</h3>
+                <p>Average Processing Time</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer style="background: var(--dark-text); color: white; padding: 2rem; text-align: center;">
+        <p>&copy; 2024 AI Image Processor. Built with AWS Cloud Services.</p>
+    </footer>
+
+    <script src="js/config.js"></script>
+    <script>
+        // Check authentication status
+        function checkAuthStatus() {
+            const token = localStorage.getItem(CONFIG.APP.TOKEN_KEY);
+            const authRequired = document.querySelectorAll('.auth-required');
+            const noAuthRequired = document.querySelectorAll('.no-auth-required');
+            
+            if (token) {
+                authRequired.forEach(el => el.classList.add('authenticated'));
+                noAuthRequired.forEach(el => el.classList.add('authenticated'));
+            }
+        }
+        
+        // Simple logout function
+        function logout() {
+            localStorage.removeItem(CONFIG.APP.TOKEN_KEY);
+            localStorage.removeItem(CONFIG.APP.USERNAME_KEY);
+            localStorage.removeItem(CONFIG.APP.EXPIRY_KEY);
+            window.location.href = 'index.html';
+        }
+        
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+        
+        // Check auth on load
+        checkAuthStatus();
+    </script>
+</body>
+</html>

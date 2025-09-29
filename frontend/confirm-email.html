@@ -1,0 +1,178 @@
+<!-- File: frontend/confirm-email.html -->
+<!-- Directory: your-image-app/frontend/ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirm Email - AI Image Processor</title>
+    <link rel="stylesheet" href="css/common.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="logo">
+                🎨 AI Image Processor
+            </a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="login.html">Login</a></li>
+                <li><a href="signup.html">Sign Up</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Confirmation Container -->
+    <div class="auth-container">
+        <div class="auth-card">
+            <h2>Confirm Your Email</h2>
+            <p class="auth-subtitle">We've sent a confirmation code to your email</p>
+            
+            <form id="confirmForm">
+                <div class="form-group">
+                    <label for="username" class="form-label">Username</label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        class="form-control" 
+                        placeholder="Enter your username"
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirmationCode" class="form-label">Confirmation Code</label>
+                    <input 
+                        type="text" 
+                        id="confirmationCode" 
+                        class="form-control" 
+                        placeholder="Enter 6-digit code"
+                        required
+                        maxlength="10"
+                    >
+                    <small class="text-muted">Check your email for the confirmation code</small>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-block btn-lg">
+                    Confirm Email
+                </button>
+                
+                <button type="button" class="btn btn-secondary btn-block mt-2" onclick="resendCode()">
+                    Resend Code
+                </button>
+            </form>
+            
+            <div class="auth-links">
+                <a href="login.html">Back to Login</a>
+            </div>
+            
+            <div id="alert" class="alert"></div>
+        </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999;">
+        <div class="spinner-container" style="height:100%;">
+            <div class="spinner"></div>
+            <span class="loading-text" style="color:white;">Confirming...</span>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script>
+        // Pre-fill username if coming from signup
+        window.addEventListener('DOMContentLoaded', () => {
+            const pendingUsername = localStorage.getItem('pendingUsername');
+            if (pendingUsername) {
+                document.getElementById('username').value = pendingUsername;
+            }
+        });
+        
+        document.getElementById('confirmForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const confirmationCode = document.getElementById('confirmationCode').value;
+            
+            // Show loading
+            document.getElementById('loadingOverlay').style.display = 'block';
+            
+            try {
+                const response = await fetch(`${CONFIG.API_HOST}/users/confirm`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        confirmationCode: confirmationCode
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showAlert(data.message || 'Confirmation failed', 'error');
+                } else {
+                    // Clear pending username
+                    localStorage.removeItem('pendingUsername');
+                    
+                    showAlert('Email confirmed successfully! Redirecting to login...', 'success');
+                    
+                    // Redirect to login
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('Confirmation error:', error);
+                showAlert('An error occurred. Please try again.', 'error');
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        });
+        
+        async function resendCode() {
+            const username = document.getElementById('username').value;
+            
+            if (!username) {
+                showAlert('Please enter your username', 'error');
+                return;
+            }
+            
+            document.getElementById('loadingOverlay').style.display = 'block';
+            
+            try {
+                const response = await fetch(`${CONFIG.API_HOST}/users/resend-confirmation-code`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username: username })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showAlert(data.message || 'Failed to resend code', 'error');
+                } else {
+                    showAlert('Confirmation code resent! Check your email.', 'success');
+                }
+            } catch (error) {
+                console.error('Resend error:', error);
+                showAlert('An error occurred. Please try again.', 'error');
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        }
+        
+        function showAlert(message, type) {
+            const alert = document.getElementById('alert');
+            alert.className = `alert alert-${type} show`;
+            alert.textContent = message;
+        }
+    </script>
+</body>
+</html>
