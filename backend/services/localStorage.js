@@ -3,46 +3,94 @@ const path = require('path');
 
 class LocalStorageService {
   constructor() {
-    this.uploadsDir = path.join(__dirname, '../../uploads');
-    this.ensureDirectory();
+    this.baseDir = path.join(__dirname, '../../uploads');
+    this.originalDir = path.join(this.baseDir, 'original');
+    this.processedDir = path.join(this.baseDir, 'processed');
+    this.ensureDirectories();
   }
 
-  async ensureDirectory() {
+  async ensureDirectories() {
     try {
-      await fs.mkdir(this.uploadsDir, { recursive: true });
+      await fs.mkdir(this.originalDir, { recursive: true });
+      await fs.mkdir(this.processedDir, { recursive: true });
     } catch (err) {
-      console.error('Error creating uploads directory:', err);
+      console.error('Error creating directories:', err);
     }
   }
 
   async uploadProcessedImage(key, buffer, contentType) {
-    const filePath = path.join(this.uploadsDir, key.replace(/\//g, '_'));
+    // ===== DEV-ONLY BEGIN =====
+    // Determine which directory based on key
+    const isProcessed = key.includes('processed');
+    const targetDir = isProcessed ? this.processedDir : this.originalDir;
+    
+    // Clean up the filename
+    const cleanKey = key.split('/').pop(); // Get just the filename
+    const filePath = path.join(targetDir, cleanKey);
+    
     await fs.writeFile(filePath, buffer);
-    return { success: true, key };
+    console.log(`Saved file to: ${filePath}`);
+    
+    // Return relative path for URL construction
+    const relativePath = isProcessed ? `processed/${cleanKey}` : `original/${cleanKey}`;
+    return { success: true, key: relativePath };
+    // ===== DEV-ONLY END =====
   }
 
   async getImageStream(key) {
-    const filePath = path.join(this.uploadsDir, key.replace(/\//g, '_'));
-    const buffer = await fs.readFile(filePath);
-    // Return a mock stream-like object
-    return {
-      pipe: (res) => res.send(buffer)
-    };
+    // ===== DEV-ONLY BEGIN =====
+    // Try multiple possible locations
+    const possiblePaths = [
+      path.join(this.processedDir, key),
+      path.join(this.processedDir, key.split('/').pop()),
+      path.join(this.originalDir, key),
+      path.join(this.originalDir, key.split('/').pop()),
+      path.join(this.baseDir, key),
+    ];
+
+    for (const filePath of possiblePaths) {
+      try {
+        const buffer = await fs.readFile(filePath);
+        console.log(`Found file at: ${filePath}`);
+        return {
+          pipe: (res) => res.send(buffer)
+        };
+      } catch (err) {
+        // Continue to next path
+      }
+    }
+    
+    throw new Error(`File not found: ${key}`);
+    // ===== DEV-ONLY END =====
   }
 
   async listUserImages(userId) {
+    // ===== DEV-ONLY BEGIN =====
     try {
-      const files = await fs.readdir(this.uploadsDir);
-      return files
-        .filter(f => f.startsWith(userId))
-        .map(f => ({ Key: f }));
+      const processedFiles = await fs.readdir(this.processedDir);
+      const images = [];
+      
+      for (const file of processedFiles) {
+        if (file.includes(userId) || process.env.NODE_ENV === 'development') {
+          images.push({
+            Key: `processed/${file}`,
+            filename: file
+          });
+        }
+      }
+      
+      return images;
     } catch {
       return [];
     }
+    // ===== DEV-ONLY END =====
   }
 
   async getSignedImageUrl(key) {
-    return `http://localhost:3001/local-image/${key}`;
+    // ===== DEV-ONLY BEGIN =====
+    // Return direct URL for local development
+    return `http://localhost:3001/uploads/${key}`;
+    // ===== DEV-ONLY END =====
   }
 }
 

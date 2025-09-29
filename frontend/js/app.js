@@ -222,32 +222,32 @@ async function processImage() {
             // Add success message
             showAlert('uploadAlert', 'Image processed successfully!', 'success');
             
-            // Try to retrieve and show the processed image
-            setTimeout(async () => {
-                try {
-                    const imageResponse = await API.getImage(imageName);
-                    if (imageResponse && imageResponse.ok) {
-                        const blob = await imageResponse.blob();
-                        const url = URL.createObjectURL(blob);
-                        
-                        // Add processed image to preview
-                        document.getElementById('previewContainer').innerHTML += `
-                            <div class="preview-item">
-                                <div class="preview-label">Processed (Background Removed)</div>
-                                <img src="${url}" alt="Processed">
-                                <button class="btn btn-success btn-block mt-2" onclick="downloadImage('${url}', '${imageName}')">
-                                    Download Processed Image
-                                </button>
-                            </div>
-                        `;
-                    }
-                } catch (error) {
-                    console.error('Error retrieving processed image:', error);
-                }
-            }, 1000);
-            
-            // Log activity (matching Remove My Background app)
-            console.log('Image uploaded successfully:', data.message);
+            // ===== DEV-ONLY BEGIN =====
+            // Show the processed image immediately
+            if (data.processedUrl) {
+                // Build the correct URL for local development
+                const processedImageUrl = `${CONFIG.API_HOST}/uploads/${data.processedUrl}`;
+                
+                // Update preview container to show both images
+                const previewContainer = document.getElementById('previewContainer');
+                const originalPreview = previewContainer.querySelector('.preview-item');
+                
+                // Add processed image preview
+                const processedPreview = document.createElement('div');
+                processedPreview.className = 'preview-item';
+                processedPreview.innerHTML = `
+                    <div class="preview-label">Processed (Background Removed)</div>
+                    <img src="${processedImageUrl}" alt="Processed" onerror="console.error('Failed to load processed image from:', '${processedImageUrl}')">
+                    <button class="btn btn-success btn-block mt-2" onclick="downloadImage('${processedImageUrl}', '${data.imageName || imageName}')">
+                        📥 Download Processed Image
+                    </button>
+                `;
+                
+                previewContainer.appendChild(processedPreview);
+                
+                console.log('Processed image URL:', processedImageUrl);
+            }
+            // ===== DEV-ONLY END =====
             
         } else {
             const errorData = await response.json();
@@ -262,7 +262,7 @@ async function processImage() {
     }
 }
 
-// Gallery Functions (matching Remove My Background app's Images.js)
+// Replace the loadGallery function with this updated version:
 async function loadGallery() {
     const loading = document.getElementById('galleryLoading');
     const grid = document.getElementById('galleryGrid');
@@ -292,16 +292,14 @@ async function loadGallery() {
                 images.sort((a, b) => new Date(b.timestamp || b.createdAt) - new Date(a.timestamp || a.createdAt));
                 
                 grid.innerHTML = images.map(img => {
-                    // Use processedS3Url if available, otherwise construct filename
-                    const imageUrl = img.processedS3Url 
-                        ? `${CONFIG.API_HOST}/images/retrieve?filename=${encodeURIComponent(img.processedS3Url)}`
-                        : `${CONFIG.API_HOST}/images/retrieve?filename=${encodeURIComponent(img.imageName)}`;
+                    // Use the retrieve endpoint for all images
+                    const imageUrl = `${CONFIG.API_HOST}/images/retrieve?filename=${encodeURIComponent(img.processedS3Url || img.filename)}`;
                     
                     return `
-                        <div class="gallery-item" onclick="viewImage('${img.processedS3Url || img.imageName}')">
+                        <div class="gallery-item" onclick="viewImage('${img.processedS3Url || img.filename}', '${img.imageName}')">
                             <img src="${imageUrl}" 
                                  alt="${img.imageName}"
-                                 onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRTBFMEUwIi8+Cjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTk5OTkiPkltYWdlIE5vdCBGb3VuZDwvdGV4dD4KPC9zdmc+'"
+                                 onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRTBFMEUwIi8+Cjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTk5OTkiPkltYWdlIE5vdCBGb3VuZDwvdGV4dD4KPC9zdmc+'"
                             >
                             <div class="gallery-item-info">
                                 <div class="gallery-item-name">${img.imageName}</div>
@@ -312,7 +310,6 @@ async function loadGallery() {
                 }).join('');
             }
         } else if (response && response.status === 204) {
-            // No content - this is the expected response for no images
             grid.innerHTML = `
                 <div class="text-center" style="grid-column: 1/-1;">
                     <p class="text-muted">No images found. Upload your first image!</p>
@@ -332,8 +329,12 @@ async function loadGallery() {
     }
 }
 
-function viewImage(filename) {
-    const imageUrl = `${CONFIG.API_HOST}/images/retrieve?filename=${encodeURIComponent(filename)}`;
+function viewImage(filename, displayName) {
+    // ===== DEV-ONLY BEGIN =====
+    const imageUrl = filename.includes('/') 
+        ? `${CONFIG.API_HOST}/uploads/${filename}`
+        : `${CONFIG.API_HOST}/images/retrieve?filename=${encodeURIComponent(filename)}`;
+    // ===== DEV-ONLY END =====
     
     const modal = document.createElement('div');
     modal.style.cssText = `
@@ -347,15 +348,16 @@ function viewImage(filename) {
         align-items: center;
         justify-content: center;
         z-index: 10000;
+        cursor: pointer;
     `;
     
     modal.innerHTML = `
-        <div style="background: white; border-radius: 10px; padding: 2rem; max-width: 90%; max-height: 90%; overflow: auto;">
-            <h2>${filename}</h2>
+        <div style="background: white; border-radius: 10px; padding: 2rem; max-width: 90%; max-height: 90%; overflow: auto; cursor: default;" onclick="event.stopPropagation()">
+            <h2>${displayName || filename}</h2>
             <img src="${imageUrl}" style="max-width: 100%; height: auto; display: block; margin: 1rem 0;">
             <div style="display: flex; gap: 1rem;">
-                <button class="btn btn-success" onclick="downloadImage('${imageUrl}', '${filename}')">
-                    Download Image
+                <button class="btn btn-success" onclick="downloadImage('${imageUrl}', '${displayName || filename}')">
+                    📥 Download Image
                 </button>
                 <button class="btn btn-secondary" onclick="this.closest('div[style]').parentElement.remove()">
                     Close
@@ -374,13 +376,66 @@ function viewImage(filename) {
 }
 
 function downloadImage(url, filename) {
-    // Create download link
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename + '_processed.png';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Create a temporary anchor element for download
+    fetch(url)
+        .then(response => response.blob())
+        .then(blob => {
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename.includes('.') ? filename : `${filename}_processed.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        })
+        .catch(error => {
+            console.error('Download error:', error);
+            alert('Failed to download image');
+        });
+}
+
+// Add a function to reset upload form after successful processing
+function resetUploadForm() {
+    selectedFile = null;
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const processBtn = document.getElementById('processBtn');
+    const imageName = document.getElementById('imageName');
+    
+    if (uploadArea) {
+        uploadArea.classList.remove('has-file');
+        uploadArea.innerHTML = `
+            <div class="upload-icon">📤</div>
+            <p>Drag & drop your image here or click to browse</p>
+            <p class="text-muted">Supports JPG, PNG, WebP (Max 10MB)</p>
+            <input type="file" id="fileInput" class="file-input" accept="image/*" style="display: none;">
+        `;
+        // Re-initialize upload area after resetting
+        initializeUploadArea();
+    }
+    
+    if (fileInput) fileInput.value = '';
+    if (processBtn) processBtn.disabled = true;
+    if (imageName) imageName.value = '';
+    
+    hideAlert('uploadAlert');
+}
+
+// Add a button to start a new upload after processing
+function addNewUploadButton() {
+    const previewContainer = document.getElementById('previewContainer');
+    if (previewContainer && !document.getElementById('newUploadBtn')) {
+        const button = document.createElement('button');
+        button.id = 'newUploadBtn';
+        button.className = 'btn btn-primary btn-block btn-lg mt-3';
+        button.innerHTML = '🔄 Process Another Image';
+        button.onclick = () => {
+            resetUploadForm();
+            document.getElementById('previewContainer').innerHTML = '';
+        };
+        previewContainer.parentElement.appendChild(button);
+    }
 }
 
 // Logs Functions (matching Remove My Background app's Logs.js)

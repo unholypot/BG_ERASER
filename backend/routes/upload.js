@@ -1,18 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
+const multer = require('multer');
+const { v4: uuidv4 } = require('uuid');
 
 // ===== DEV-ONLY BEGIN =====
 const s3Service = process.env.NODE_ENV === 'development'
   ? require('../services/localStorage')
   : require('../services/s3');
 // ===== DEV-ONLY END =====
-// Production: const s3Service = require('../services/s3');
 
 const databaseService = require('../services/database');
 const imageProcessorService = require('../services/imageProcessor');
-const multer = require('multer');
-const { v4: uuidv4 } = require('uuid');
 
 // Configure multer for memory storage
 const upload = multer({
@@ -41,43 +40,44 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
     }
 
     const userId = req.user.userId;
-    const imageName = req.body.imageName || req.file.originalname;
+    const imageName = req.body.imageName || req.file.originalname.split('.')[0];
     const imageId = uuidv4();
 
-    // ===== DEV-ONLY BEGIN =====
     console.log(`Processing image: ${imageName}, Type: ${req.file.mimetype}, Size: ${req.file.buffer.length} bytes`);
-    // ===== DEV-ONLY END =====
 
     // Process the image to remove background
     const processedImage = await imageProcessorService.processImage(req.file.buffer, 'png', req.file.mimetype);
 
-    // Upload original to S3
-    const originalKey = `${userId}/original_${imageId}.${req.file.mimetype.split('/')[1]}`;
+    // ===== DEV-ONLY BEGIN =====
+    // Save files with cleaner names for dev
+    const originalExt = req.file.mimetype.split('/')[1];
+    const originalKey = `original_${userId}_${imageId}.${originalExt}`;
+    const processedKey = `processed_${userId}_${imageId}.png`;
+    // ===== DEV-ONLY END =====
+
+    // Upload original
     await s3Service.uploadProcessedImage(originalKey, req.file.buffer, req.file.mimetype);
 
-    // Upload processed to S3
-    const processedKey = `${userId}/processed_${imageId}.png`;
-    await s3Service.uploadProcessedImage(processedKey, processedImage.buffer, 'image/png');
+    // Upload processed
+    const processedResult = await s3Service.uploadProcessedImage(processedKey, processedImage.buffer, 'image/png');
 
     // ===== DEV-ONLY BEGIN =====
+    // Save to database with proper paths
     let dbImageId = imageId;
     if (process.env.NODE_ENV === 'development') {
-      console.log('Dev mode: Skipping full database save, using mock ID');
-      // Create minimal DB entry for dev
       try {
         dbImageId = await databaseService.saveImageData(
           userId,
           imageName,
-          originalKey,
-          processedKey
+          `original/${originalKey}`,
+          processedResult.key // This now contains the correct path
         );
       } catch (dbError) {
         console.log('DB save failed in dev, continuing:', dbError.message);
-        dbImageId = imageId; // Use generated ID as fallback
+        dbImageId = imageId;
       }
     } else {
     // ===== DEV-ONLY END =====
-      // Save to database
       dbImageId = await databaseService.saveImageData(
         userId,
         imageName,
@@ -85,7 +85,6 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
         processedKey
       );
 
-      // Log the activity
       await databaseService.saveLog(
         userId,
         `Processed image: ${imageName}`,
@@ -99,7 +98,8 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
       error: false,
       message: 'Image processed successfully',
       imageId: dbImageId,
-      processedUrl: processedKey
+      processedUrl: processedResult.key, // Return the correct path
+      imageName: imageName
     });
   } catch (error) {
     console.error('Upload error:', error);

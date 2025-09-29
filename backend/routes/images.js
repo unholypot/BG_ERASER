@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const databaseService = require('../services/database');
+const path = require('path');
+const fs = require('fs');
 
 // ===== DEV-ONLY BEGIN =====
 const s3Service = process.env.NODE_ENV === 'development'
@@ -9,37 +11,43 @@ const s3Service = process.env.NODE_ENV === 'development'
   : require('../services/s3');
 // ===== DEV-ONLY END =====
 
-// Get all user images - matching MyBackgroundEraser's /images endpoint
+// Get all user images
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
     
     // ===== DEV-ONLY BEGIN =====
     if (process.env.NODE_ENV === 'development') {
-      // In dev mode, return mock data or check local files
-      const fs = require('fs');
-      const path = require('path');
-      const uploadsDir = path.join(__dirname, '../../uploads');
+      const uploadsDir = path.join(__dirname, '../../uploads/processed');
       
       try {
         const files = fs.readdirSync(uploadsDir);
-        const userFiles = files.filter(f => f.includes('processed'));
+        const userFiles = files.filter(f => f.endsWith('.png'));
         
         if (userFiles.length === 0) {
-          return res.status(204).send(); // No content
+          return res.status(204).send();
         }
         
-        // Create mock image data matching the expected format
-        const images = userFiles.map((file, index) => ({
-          imageId: index + 1,
-          imageName: file.replace('_processed_', '_').replace('.png', ''),
-          timestamp: new Date().toISOString(),
-          processedS3Url: file
-        }));
+        const images = userFiles.map((file, index) => {
+          // Clean up the image name for display
+          const cleanName = file
+            .replace('processed_', '')
+            .replace('local_admin_', '')
+            .replace(`${userId}_`, '')
+            .replace('.png', '');
+          
+          return {
+            imageId: index + 1,
+            imageName: cleanName,
+            timestamp: new Date().toISOString(),
+            processedS3Url: file, // Just the filename, no path
+            filename: file
+          };
+        });
         
         return res.json(images);
       } catch (err) {
-        console.log('Dev mode: No uploads directory or files');
+        console.log('Error reading uploads directory:', err);
         return res.status(204).send();
       }
     }
@@ -48,7 +56,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const images = await databaseService.getUserImages(userId);
     
     if (!images || images.length === 0) {
-      return res.status(204).send(); // No content, matching the reference
+      return res.status(204).send();
     }
     
     res.json(images);
@@ -61,11 +69,10 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// Get single image by filename - matching MyBackgroundEraser's /retrieve endpoint
+// Get single image by filename - serve actual file
 router.get('/retrieve', authenticateToken, async (req, res) => {
   try {
     const { filename } = req.query;
-    const userId = req.user.userId;
     
     if (!filename) {
       return res.status(400).json({
@@ -76,26 +83,34 @@ router.get('/retrieve', authenticateToken, async (req, res) => {
 
     // ===== DEV-ONLY BEGIN =====
     if (process.env.NODE_ENV === 'development') {
-      const fs = require('fs');
-      const path = require('path');
+      const processedDir = path.join(__dirname, '../../uploads/processed');
+      const originalDir = path.join(__dirname, '../../uploads/original');
       
-      // Check different possible file locations
-      const possibleFiles = [
-        path.join(__dirname, '../../uploads', filename),
-        path.join(__dirname, '../../uploads', `${userId}_processed_${filename}.png`),
-        path.join(__dirname, '../../uploads', filename.replace(/\//g, '_')),
-        path.join(__dirname, '../../uploads', 'debug_output.png') // Fallback to debug output
-      ];
+      // Clean the filename (remove any path components)
+      const cleanFilename = filename.split('/').pop();
       
-      for (const filePath of possibleFiles) {
-        if (fs.existsSync(filePath)) {
-          console.log(`Serving file: ${filePath}`);
-          res.setHeader('Content-Type', 'image/png');
-          return res.sendFile(filePath);
-        }
+      // Try processed directory first
+      let filePath = path.join(processedDir, cleanFilename);
+      
+      if (!fs.existsSync(filePath)) {
+        // Try original directory
+        filePath = path.join(originalDir, cleanFilename);
       }
       
-      console.log('File not found, tried:', possibleFiles);
+      if (fs.existsSync(filePath)) {
+        console.log(`Serving image: ${cleanFilename} from ${filePath}`);
+        
+        // Determine content type
+        const ext = path.extname(cleanFilename).toLowerCase();
+        let contentType = 'image/png';
+        if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+        else if (ext === '.webp') contentType = 'image/webp';
+        
+        res.setHeader('Content-Type', contentType);
+        return res.sendFile(filePath);
+      }
+      
+      console.log(`Image not found: ${cleanFilename}`);
       return res.status(404).json({
         error: true,
         message: 'Image not found'

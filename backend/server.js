@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const winston = require('winston');
+const path = require('path');
 
 // Import routes
 const userRoutes = require('./routes/users');
@@ -51,11 +52,15 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// ===== DEV-ONLY BEGIN =====
 // Serve local images in development
 if (process.env.NODE_ENV === 'development') {
+  // Serve static files from uploads directory
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+  
+  // Legacy route for compatibility
   app.get('/local-image/:key', (req, res) => {
     const fs = require('fs');
-    const path = require('path');
     const filePath = path.join(__dirname, '../uploads', req.params.key.replace(/\//g, '_'));
     if (fs.existsSync(filePath)) {
       res.sendFile(filePath);
@@ -64,6 +69,8 @@ if (process.env.NODE_ENV === 'development') {
     } 
   });
 }
+// ===== DEV-ONLY END =====
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   logger.error(err.stack);
