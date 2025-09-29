@@ -3,13 +3,7 @@ const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
-
-// ===== DEV-ONLY BEGIN =====
-const s3Service = process.env.NODE_ENV === 'development'
-  ? require('../services/localStorage')
-  : require('../services/s3');
-// ===== DEV-ONLY END =====
-
+const s3Service = require('../services/s3');
 const databaseService = require('../services/database');
 const imageProcessorService = require('../services/imageProcessor');
 
@@ -29,7 +23,6 @@ const upload = multer({
   }
 });
 
-// Upload and process image
 router.post('/', authenticateToken, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
@@ -43,62 +36,46 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
     const imageName = req.body.imageName || req.file.originalname.split('.')[0];
     const imageId = uuidv4();
 
-    console.log(`Processing image: ${imageName}, Type: ${req.file.mimetype}, Size: ${req.file.buffer.length} bytes`);
+    console.log(`Processing image: ${imageName}`);
 
     // Process the image to remove background
-    const processedImage = await imageProcessorService.processImage(req.file.buffer, 'png', req.file.mimetype);
+    const processedImage = await imageProcessorService.processImage(
+      req.file.buffer, 
+      'png', 
+      req.file.mimetype
+    );
 
-    // ===== DEV-ONLY BEGIN =====
-    // Save files with cleaner names for dev
+    // Create S3 keys with user folder structure
     const originalExt = req.file.mimetype.split('/')[1];
-    const originalKey = `original_${userId}_${imageId}.${originalExt}`;
-    const processedKey = `processed_${userId}_${imageId}.png`;
-    // ===== DEV-ONLY END =====
+    const originalKey = `${userId}/original/${imageId}.${originalExt}`;
+    const processedKey = `${userId}/processed/${imageId}.png`;
 
-    // Upload original
+    // Upload to S3
     await s3Service.uploadProcessedImage(originalKey, req.file.buffer, req.file.mimetype);
+    await s3Service.uploadProcessedImage(processedKey, processedImage.buffer, 'image/png');
 
-    // Upload processed
-    const processedResult = await s3Service.uploadProcessedImage(processedKey, processedImage.buffer, 'image/png');
+    // Get presigned URL for the processed image (for immediate display)
+    const processedUrl = await s3Service.getSignedImageUrl(processedKey, 3600);
 
-    // ===== DEV-ONLY BEGIN =====
-    // Save to database with proper paths
-    let dbImageId = imageId;
-    if (process.env.NODE_ENV === 'development') {
-      try {
-        dbImageId = await databaseService.saveImageData(
-          userId,
-          imageName,
-          `original/${originalKey}`,
-          processedResult.key // This now contains the correct path
-        );
-      } catch (dbError) {
-        console.log('DB save failed in dev, continuing:', dbError.message);
-        dbImageId = imageId;
-      }
-    } else {
-    // ===== DEV-ONLY END =====
-      dbImageId = await databaseService.saveImageData(
-        userId,
-        imageName,
-        originalKey,
-        processedKey
-      );
+    // Save to database
+    const dbImageId = await databaseService.saveImageData(
+      userId,
+      imageName,
+      originalKey,
+      processedKey
+    );
 
-      await databaseService.saveLog(
-        userId,
-        `Processed image: ${imageName}`,
-        dbImageId
-      );
-    // ===== DEV-ONLY BEGIN =====
-    }
-    // ===== DEV-ONLY END =====
+    await databaseService.saveLog(
+      userId,
+      `Processed image: ${imageName}`,
+      dbImageId
+    );
 
     res.json({
       error: false,
       message: 'Image processed successfully',
       imageId: dbImageId,
-      processedUrl: processedResult.key, // Return the correct path
+      processedUrl: processedUrl, // Return presigned URL
       imageName: imageName
     });
   } catch (error) {
@@ -106,6 +83,29 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
     res.status(500).json({
       error: true,
       message: error.message || 'Failed to process image'
+    });
+  }
+});
+
+// New endpoint: Get presigned URL for direct upload (bonus feature)
+router.post('/get-upload-url', authenticateToken, async (req, res) => {
+  try {
+    const { filename, contentType } = req.body;
+    const userId = req.user.userId;
+    const imageId = uuidv4();
+    
+    const key = `${userId}/uploads/${imageId}-${filename}`;
+    const uploadUrl = await s3Service.getSignedUploadUrl(key, contentType);
+    
+    res.json({
+      uploadUrl,
+      key,
+      imageId
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: true,
+      message: 'Failed to generate upload URL'
     });
   }
 });

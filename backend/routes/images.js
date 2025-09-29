@@ -1,57 +1,31 @@
-// File: backend/routes/images.js - FIXED VERSION
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const databaseService = require('../services/database');
-const path = require('path');
-const fs = require('fs');
+const s3Service = require('../services/s3');
 
-// ===== DEV-ONLY BEGIN =====
-const s3Service = process.env.NODE_ENV === 'development'
-  ? require('../services/localStorage')
-  : require('../services/s3');
-// ===== DEV-ONLY END =====
-
-// Get all user images
+// Get all user images with presigned URLs
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
-    
-    // ===== DEV-ONLY BEGIN =====
-    if (process.env.NODE_ENV === 'development') {
-      const uploadsDir = path.join(__dirname, '../../uploads/processed');
-      
-      try {
-        const files = fs.readdirSync(uploadsDir);
-        const userFiles = files.filter(f => f.endsWith('.png'));
-        
-        if (userFiles.length === 0) {
-          return res.status(204).send();
-        }
-        
-        const images = userFiles.map((file, index) => ({
-          imageId: index + 1,
-          imageName: file.replace('processed_', '').replace(`${userId}_`, '').replace('.png', ''),
-          timestamp: new Date().toISOString(),
-          processedS3Url: `processed/${file}`,
-          filename: file
-        }));
-        
-        return res.json(images);
-      } catch (err) {
-        console.log('Error reading uploads directory:', err);
-        return res.status(204).send();
-      }
-    }
-    // ===== DEV-ONLY END =====
-    
     const images = await databaseService.getUserImages(userId);
     
     if (!images || images.length === 0) {
       return res.status(204).send();
     }
     
-    res.json(images);
+    // Generate presigned URLs for each image
+    const imagesWithUrls = await Promise.all(
+      images.map(async (img) => {
+        const presignedUrl = await s3Service.getSignedImageUrl(img.processedS3Url);
+        return {
+          ...img,
+          presignedUrl
+        };
+      })
+    );
+    
+    res.json(imagesWithUrls);
   } catch (error) {
     console.error('Error fetching images:', error);
     res.status(500).json({
@@ -61,54 +35,88 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// Get single image by filename - FIXED
-router.get('/retrieve', authenticateToken, async (req, res) => {
+// Get single image presigned URL
+router.get('/url/:imageId', authenticateToken, async (req, res) => {
   try {
-    const { filename } = req.query;
+    const { imageId } = req.params;
+    const userId = req.user.userId;
     
-    if (!filename) {
-      return res.status(400).json({
-        error: true,
-        message: 'Filename query parameter is required'
-      });
-    }
-
-    // ===== DEV-ONLY BEGIN =====
-    if (process.env.NODE_ENV === 'development') {
-      const baseDir = path.join(__dirname, '../../uploads');
-      
-      // Try different possible paths
-      const possiblePaths = [
-        path.join(baseDir, filename),
-        path.join(baseDir, 'processed', filename.split('/').pop()),
-        path.join(baseDir, 'original', filename.split('/').pop()),
-        path.join(baseDir, 'processed', filename.replace('processed/', ''))
-      ];
-      
-      for (const filePath of possiblePaths) {
-        if (fs.existsSync(filePath)) {
-          console.log(`Serving image from: ${filePath}`);
-          return res.sendFile(filePath);
-        }
-      }
-      
-      console.log('Image not found, tried paths:', possiblePaths);
+    const image = await databaseService.getImageById(imageId, userId);
+    
+    if (!image) {
       return res.status(404).json({
         error: true,
         message: 'Image not found'
       });
     }
-    // ===== DEV-ONLY END =====
+    
+    const originalUrl = await s3Service.getSignedImageUrl(image.originalS3Url);
+    const processedUrl = await s3Service.getSignedImageUrl(image.processedS3Url);
+    
+    res.json({
+      originalUrl,
+      processedUrl,
+      imageName: image.imageName
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: true,
+      message: 'Failed to get image URLs'
+    });
+  }
+});
 
-    // Production: Get image stream from S3
-    const imageStream = await s3Service.getImageStream(filename);
+// Add this new route for downloading images
+router.get('/download/:imageId', async (req, res) => {
+  try {
+    // Get token from query parameter for download requests
+    const token = req.query.token || req.headers.authorization?.split(' ')[1];
+    
+    if (!token) {
+      return res.status(401).json({
+        error: true,
+        message: 'Access token required'
+      });
+    }
+    
+    // Verify token manually
+    const jwt = require('jsonwebtoken');
+    let user;
+    try {
+      user = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(401).json({
+        error: true,
+        message: 'Invalid or expired token'
+      });
+    }
+    
+    const { imageId } = req.params;
+    const userId = user.userId;
+    
+    const image = await databaseService.getImageById(imageId, userId);
+    
+    if (!image) {
+      return res.status(404).json({
+        error: true,
+        message: 'Image not found'
+      });
+    }
+    
+    // Get the image stream from S3
+    const imageStream = await s3Service.getImageStream(image.processedS3Url);
+    
+    // Set headers for download
     res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Disposition', `attachment; filename="${image.imageName}_processed.png"`);
+    
+    // Pipe the stream to response
     imageStream.pipe(res);
   } catch (error) {
-    console.error('Retrieve error:', error);
-    res.status(404).json({
+    console.error('Download error:', error);
+    res.status(500).json({
       error: true,
-      message: 'Image not found'
+      message: 'Failed to download image'
     });
   }
 });

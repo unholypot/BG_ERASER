@@ -5,12 +5,10 @@ const cognitoClient = new CognitoIdentityProviderClient({
   region: process.env.AWS_REGION
 });
 
+// Remove the explicit credentials - let SDK use default credential chain
 const s3Client = new S3Client({
-  region: process.env.S3_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-  }
+  region: process.env.S3_REGION || process.env.AWS_REGION
+  // Remove the credentials block entirely - SDK will use SSO
 });
 
 module.exports = {

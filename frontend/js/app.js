@@ -222,32 +222,31 @@ async function processImage() {
             // Add success message
             showAlert('uploadAlert', 'Image processed successfully!', 'success');
             
-            // ===== DEV-ONLY BEGIN =====
             // Show the processed image immediately
             if (data.processedUrl) {
-                // Build the correct URL for local development
-                const processedImageUrl = `${CONFIG.API_HOST}/uploads/${data.processedUrl}`;
+                // The processedUrl is already a complete presigned URL
+                const processedImageUrl = data.processedUrl;
+                const imageId = data.imageId; // Get the imageId from response
                 
                 // Update preview container to show both images
                 const previewContainer = document.getElementById('previewContainer');
-                const originalPreview = previewContainer.querySelector('.preview-item');
                 
                 // Add processed image preview
                 const processedPreview = document.createElement('div');
                 processedPreview.className = 'preview-item';
                 processedPreview.innerHTML = `
                     <div class="preview-label">Processed (Background Removed)</div>
-                    <img src="${processedImageUrl}" alt="Processed" onerror="console.error('Failed to load processed image from:', '${processedImageUrl}')">
-                    <button class="btn btn-success btn-block mt-2" onclick="downloadImage('${processedImageUrl}', '${data.imageName || imageName}')">
-                        📥 Download Processed Image
+                    <img src="${processedImageUrl}" alt="Processed">
+                    <button class="btn btn-success btn-block mt-2" onclick="downloadImage('${imageId}', '${data.imageName || imageName}')">
+                         Download Processed Image
                     </button>
                 `;
                 
                 previewContainer.appendChild(processedPreview);
                 
                 console.log('Processed image URL:', processedImageUrl);
+                console.log('Image ID:', imageId);
             }
-            // ===== DEV-ONLY END =====
             
         } else {
             const errorData = await response.json();
@@ -266,7 +265,6 @@ async function processImage() {
 async function loadGallery() {
     const loading = document.getElementById('galleryLoading');
     const grid = document.getElementById('galleryGrid');
-    const alert = document.getElementById('galleryAlert');
     
     loading.style.display = 'flex';
     hideAlert('galleryAlert');
@@ -276,127 +274,112 @@ async function loadGallery() {
         
         if (response && response.ok) {
             const images = await response.json();
-            currentImages = images;
             
             if (images.length === 0) {
-                grid.innerHTML = `
-                    <div class="text-center" style="grid-column: 1/-1;">
-                        <p class="text-muted">No images yet. Start by uploading your first image!</p>
-                        <button class="btn btn-primary mt-2" onclick="navigateTo('upload')">
-                            Upload Image
-                        </button>
-                    </div>
-                `;
+                grid.innerHTML = '<p>No images yet</p>';
             } else {
-                // Sort images by date (newest first)
-                images.sort((a, b) => new Date(b.timestamp || b.createdAt) - new Date(a.timestamp || a.createdAt));
-                
-                grid.innerHTML = images.map(img => {
-                    // Use the retrieve endpoint for all images
-                    // const imageUrl = `${CONFIG.API_HOST}/images/retrieve?filename=${encodeURIComponent(img.processedS3Url || img.filename)}`;
-                    // For local dev, use direct path to processed images
-                    const imageUrl = `${CONFIG.API_HOST}/uploads/${img.processedS3Url || img.filename}`;
-
-                    return `
-                        <div class="gallery-item" onclick="viewImage('${img.processedS3Url || img.filename}', '${img.imageName}')">
-                            <img src="${imageUrl}" 
-                                 alt="${img.imageName}"
-                                 onerror="console.error('Failed to load thumbnail:', '${imageUrl}'); this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRTBFMEUwIi8+Cjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTk5OTkiPkltYWdlIE5vdCBGb3VuZDwvdGV4dD4KPC9zdmc+'"
-                            >
-                            <div class="gallery-item-info">
-                                <div class="gallery-item-name">${img.imageName}</div>
-                                <div class="gallery-item-date">${formatDate(img.timestamp || img.createdAt)}</div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+                grid.innerHTML = images.map(img => `
+    <div class="gallery-item">
+        <img src="${img.presignedUrl}" alt="${img.imageName}" onclick="viewImage('${img.imageId}', '${img.imageName}')">
+        <div class="gallery-item-info">
+            <div class="gallery-item-name">${img.imageName}</div>
+            <div class="gallery-item-date">${formatDate(img.timestamp)}</div>
+            <button class="btn btn-sm btn-success" onclick="event.stopPropagation(); downloadImage('${img.imageId}', '${img.imageName}')">
+                Download
+            </button>
+        </div>
+    </div>
+`).join('');
             }
-        } else if (response && response.status === 204) {
-            grid.innerHTML = `
-                <div class="text-center" style="grid-column: 1/-1;">
-                    <p class="text-muted">No images found. Upload your first image!</p>
-                    <button class="btn btn-primary mt-2" onclick="navigateTo('upload')">
-                        Upload Image
-                    </button>
-                </div>
-            `;
-        } else {
-            showAlert('galleryAlert', 'Failed to load images', 'error');
         }
     } catch (error) {
         console.error('Gallery error:', error);
-        showAlert('galleryAlert', 'An error occurred while loading images', 'error');
+        showAlert('galleryAlert', 'Failed to load images', 'error');
     } finally {
         loading.style.display = 'none';
     }
 }
 
-function viewImage(filename, displayName) {
-    // ===== DEV-ONLY BEGIN =====
-    //const imageUrl = filename.includes('/') 
-    //    ? `${CONFIG.API_HOST}/uploads/${filename}`
-    //    : `${CONFIG.API_HOST}/images/retrieve?filename=${encodeURIComponent(filename)}`;
-
-    const imageUrl = `${CONFIG.API_HOST}/uploads/${filename}`;
-    // ===== DEV-ONLY END =====
-    
-    const modal = document.createElement('div');
-    modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.8);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10000;
-        cursor: pointer;
-    `;
-    
-    modal.innerHTML = `
-        <div style="background: white; border-radius: 10px; padding: 2rem; max-width: 90%; max-height: 90%; overflow: auto; cursor: default;" onclick="event.stopPropagation()">
-            <h2>${displayName || filename}</h2>
-            <img src="${imageUrl}" style="max-width: 100%; height: auto; display: block; margin: 1rem 0;">
-            <div style="display: flex; gap: 1rem;">
-                <button class="btn btn-success" onclick="downloadImage('${imageUrl}', '${displayName || filename}')">
-                    📥 Download Image
-                </button>
-                <button class="btn btn-secondary" onclick="this.closest('div[style]').parentElement.remove()">
-                    Close
-                </button>
-            </div>
+async function viewImage(imageId, displayName) {
+    try {
+        // Fetch presigned URLs for this image
+        const response = await fetch(`${CONFIG.API_HOST}/images/url/${imageId}`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const imageUrl = data.processedUrl;
+            
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                cursor: pointer;
+            `;
+            
+            modal.innerHTML = `
+    <div style="background: white; border-radius: 10px; padding: 2rem; max-width: 90%; max-height: 90%; overflow: auto; cursor: default;" onclick="event.stopPropagation()">
+        <h2>${displayName}</h2>
+        <img src="${imageUrl}" style="max-width: 100%; height: auto; display: block; margin: 1rem 0;">
+        <div style="display: flex; gap: 1rem;">
+            <button class="btn btn-success" onclick="downloadImage('${imageId}', '${displayName}')">
+                🔥 Download Image
+            </button>
+            <button class="btn btn-secondary" onclick="this.closest('div[style]').parentElement.remove()">
+                Close
+            </button>
         </div>
-    `;
-    
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.remove();
+    </div>
+`;
+            
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+            
+            document.body.appendChild(modal);
         }
-    });
-    
-    document.body.appendChild(modal);
+    } catch (error) {
+        console.error('Error loading image:', error);
+        alert('Failed to load image');
+    }
 }
 
-function downloadImage(url, filename) {
-    // Create a temporary anchor element for download
-    fetch(url)
-        .then(response => response.blob())
-        .then(blob => {
-            const blobUrl = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = blobUrl;
-            link.download = filename.includes('.') ? filename : `${filename}_processed.png`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(blobUrl);
-        })
-        .catch(error => {
-            console.error('Download error:', error);
-            alert('Failed to download image');
-        });
+function downloadImage(imageId, filename) {
+    // Get the token
+    const token = localStorage.getItem(CONFIG.APP.TOKEN_KEY);
+    
+    if (!token) {
+        alert('Please login to download images');
+        return;
+    }
+    
+    // Create download URL with token as query parameter
+    const downloadUrl = `${CONFIG.API_HOST}/images/download/${imageId}?token=${encodeURIComponent(token)}`;
+    
+    // Create a temporary link and click it
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename.includes('.') ? filename : `${filename}_processed.png`;
+    link.style.display = 'none';
+    
+    document.body.appendChild(link);
+    link.click();
+    
+    // Clean up
+    setTimeout(() => {
+        document.body.removeChild(link);
+    }, 100);
 }
 
 // Add a function to reset upload form after successful processing
