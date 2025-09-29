@@ -1,3 +1,4 @@
+// File: backend/routes/images.js - FIXED VERSION
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
@@ -28,22 +29,13 @@ router.get('/', authenticateToken, async (req, res) => {
           return res.status(204).send();
         }
         
-        const images = userFiles.map((file, index) => {
-          // Clean up the image name for display
-          const cleanName = file
-            .replace('processed_', '')
-            .replace('local_admin_', '')
-            .replace(`${userId}_`, '')
-            .replace('.png', '');
-          
-          return {
-            imageId: index + 1,
-            imageName: cleanName,
-            timestamp: new Date().toISOString(),
-            processedS3Url: file, // Just the filename, no path
-            filename: file
-          };
-        });
+        const images = userFiles.map((file, index) => ({
+          imageId: index + 1,
+          imageName: file.replace('processed_', '').replace(`${userId}_`, '').replace('.png', ''),
+          timestamp: new Date().toISOString(),
+          processedS3Url: `processed/${file}`,
+          filename: file
+        }));
         
         return res.json(images);
       } catch (err) {
@@ -69,7 +61,7 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// Get single image by filename - serve actual file
+// Get single image by filename - FIXED
 router.get('/retrieve', authenticateToken, async (req, res) => {
   try {
     const { filename } = req.query;
@@ -83,34 +75,24 @@ router.get('/retrieve', authenticateToken, async (req, res) => {
 
     // ===== DEV-ONLY BEGIN =====
     if (process.env.NODE_ENV === 'development') {
-      const processedDir = path.join(__dirname, '../../uploads/processed');
-      const originalDir = path.join(__dirname, '../../uploads/original');
+      const baseDir = path.join(__dirname, '../../uploads');
       
-      // Clean the filename (remove any path components)
-      const cleanFilename = filename.split('/').pop();
+      // Try different possible paths
+      const possiblePaths = [
+        path.join(baseDir, filename),
+        path.join(baseDir, 'processed', filename.split('/').pop()),
+        path.join(baseDir, 'original', filename.split('/').pop()),
+        path.join(baseDir, 'processed', filename.replace('processed/', ''))
+      ];
       
-      // Try processed directory first
-      let filePath = path.join(processedDir, cleanFilename);
-      
-      if (!fs.existsSync(filePath)) {
-        // Try original directory
-        filePath = path.join(originalDir, cleanFilename);
+      for (const filePath of possiblePaths) {
+        if (fs.existsSync(filePath)) {
+          console.log(`Serving image from: ${filePath}`);
+          return res.sendFile(filePath);
+        }
       }
       
-      if (fs.existsSync(filePath)) {
-        console.log(`Serving image: ${cleanFilename} from ${filePath}`);
-        
-        // Determine content type
-        const ext = path.extname(cleanFilename).toLowerCase();
-        let contentType = 'image/png';
-        if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
-        else if (ext === '.webp') contentType = 'image/webp';
-        
-        res.setHeader('Content-Type', contentType);
-        return res.sendFile(filePath);
-      }
-      
-      console.log(`Image not found: ${cleanFilename}`);
+      console.log('Image not found, tried paths:', possiblePaths);
       return res.status(404).json({
         error: true,
         message: 'Image not found'
