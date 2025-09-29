@@ -95,3 +95,6 @@ jspm_packages/
 # Backup files
 *.bak
 *.backup
+
+# Project documentation/summary files
+BG_ERASER*.txt
