@@ -16,26 +16,27 @@
 // Use SQLite for testing 
 
 const knex = require('knex')({
-  client: process.env.DB_HOST ? 'mysql2' : 'sqlite3',
-  connection: process.env.DB_HOST ? {
+  client: 'pg',
+  connection: {
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
-  } : {
-    filename: './dev.sqlite3'
+    database: process.env.DB_NAME,
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
   },
-  useNullAsDefault: true,
+  searchPath: [process.env.DB_USER, 'public'],
   pool: {
     min: 2,
-    max: 10
+    max: 10,
+    acquireTimeoutMillis: 30000,
+    idleTimeoutMillis: 30000,
+    reapIntervalMillis: 1000,
   }
 });
 
 class DatabaseService {
   async createTables() {
-    // Create image-data table
     if (!(await knex.schema.hasTable('image_data'))) {
       await knex.schema.createTable('image_data', table => {
         table.increments('imageId').primary();
@@ -48,7 +49,6 @@ class DatabaseService {
       });
     }
 
-    // Create logs table
     if (!(await knex.schema.hasTable('logs'))) {
       await knex.schema.createTable('logs', table => {
         table.increments('logId').primary();
@@ -61,6 +61,7 @@ class DatabaseService {
       });
     }
   }
+
 
   async saveImageData(userId, imageName, originalS3Url, processedS3Url) {
     const [imageId] = await knex('image_data').insert({
