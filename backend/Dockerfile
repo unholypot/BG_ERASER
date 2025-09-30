@@ -1,8 +1,13 @@
-FROM node:18-alpine
+FROM node:18-slim
 
 WORKDIR /app
 
-RUN apk add --no-cache postgresql-client
+# Install dependencies for image processing and PostgreSQL
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    build-essential \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 RUN npm ci --only=production
