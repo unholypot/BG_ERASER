@@ -28,7 +28,7 @@ const logger = winston.createLogger({
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:8080',
+  origin: ['http://localhost:5000', 'http://54.252.157.228:5000', 'http://localhost:8080'],
   credentials: true
 }));
 

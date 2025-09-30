@@ -1,7 +1,7 @@
 // Configuration for the application
 const CONFIG = {
     // API endpoint - will be updated when backend is ready
-    API_HOST: 'http://localhost:3001',
+    API_HOST: 'http://54.252.157.228:3001',
     
     // AWS Cognito settings - TO BE CONFIGURED
     COGNITO: {
