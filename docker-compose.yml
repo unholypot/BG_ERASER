@@ -24,7 +24,7 @@ services:
       dockerfile: Dockerfile
     container_name: bg-eraser-frontend
     ports:
-      - "80:80"
+      - "5000:80"
     environment:
       - API_HOST=${API_HOST:-http://backend:3001}
     networks:
