@@ -21,7 +21,3 @@ const CONFIG = {
     }
 };
 
-// Check if running in production
-if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    CONFIG.API_HOST = 'https://your-api-domain.com:3001'; // Will update with actual domain
-}
