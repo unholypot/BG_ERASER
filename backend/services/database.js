@@ -1,19 +1,3 @@
-// const knex = require('knex')({
-//   client: 'mysql2',
-//   connection: {
-//     host: process.env.DB_HOST,
-//     port: process.env.DB_PORT,
-//     user: process.env.DB_USER,
-//     password: process.env.DB_PASSWORD,
-//     database: process.env.DB_NAME
-//   },
-//   pool: {
-//     min: 2,
-//     max: 10
-//   }
-// });
-
-// Use SQLite for testing 
 
 const knex = require('knex')({
   client: 'pg',
@@ -63,15 +47,17 @@ class DatabaseService {
   }
 
 
-  async saveImageData(userId, imageName, originalS3Url, processedS3Url) {
-    const [imageId] = await knex('image_data').insert({
-      userId,
-      imageName,
-      originalS3Url,
-      processedS3Url
-    });
-    return imageId;
-  }
+async saveImageData(userId, imageName, originalS3Url, processedS3Url) {
+  const result = await knex('image_data').insert({
+    userId,
+    imageName,
+    originalS3Url,
+    processedS3Url
+  }).returning('imageId');
+  
+  // PostgreSQL returns an array with objects, MySQL returns just the ID
+  return result[0].imageId || result[0];
+}
 
   async saveLog(userId, description, imageId = null) {
     await knex('logs').insert({
