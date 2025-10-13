@@ -86,5 +86,14 @@ async saveImageData(userId, imageName, originalS3Url, processedS3Url) {
       .where({ imageId, userId })
       .first();
   }
+async updateImageStatus(imageId, status) {
+  return await knex('image_data')
+    .where('imageId', imageId)
+    .update({ 
+      status,
+      updatedAt: knex.fn.now()
+    });
+}
+  
 }
 module.exports = new DatabaseService();
