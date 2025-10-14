@@ -1,0 +1,44 @@
+{
+  "family": "n11310375-api-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "taskRoleArn": "arn:aws:iam::901444280953:role/CAB432-TASK-ROLE",
+  "executionRoleArn": "arn:aws:iam::901444280953:role/ecsTaskExecutionRole",
+  "containerDefinitions": [{
+    "name": "api",
+    "image": "901444280953.dkr.ecr.ap-southeast-2.amazonaws.com/n11310375-api:latest",
+    "portMappings": [{
+      "containerPort": 3001,
+      "protocol": "tcp"
+    }],
+    "essential": true,
+    "environment": [
+      {"name": "PORT", "value": "3001"},
+      {"name": "AWS_REGION", "value": "ap-southeast-2"},
+      {"name": "SQS_QUEUE_URL", "value": "https://sqs.ap-southeast-2.amazonaws.com/901444280953/n11310375-bg-queue"},
+      {"name": "S3_BUCKET_NAME", "value": "bg-eraser-images-n11310375"},
+      {"name": "DB_HOST", "value": "database-1-instance-1.ce2haupt2cta.ap-southeast-2.rds.amazonaws.com"},
+      {"name": "DB_PORT", "value": "5432"},
+      {"name": "DB_NAME", "value": "cohort_2025"},
+      {"name": "DB_USER", "value": "s009"},
+      {"name": "DB_PASSWORD", "value": "HAVlM9h5FWXA"},
+      {"name": "DB_SSL", "value": "true"},
+      {"name": "JWT_SECRET", "value": "your_production_jwt_secret_change_this"},
+      {"name": "JWT_EXPIRY", "value": "7d"},
+      {"name": "COGNITO_USER_POOL_ID", "value": "ap-southeast-2_O3w9noFmV"},
+      {"name": "COGNITO_CLIENT_ID", "value": "6jpgh3ibi0kpajef3jsej3pfjs"},
+      {"name": "COGNITO_CLIENT_SECRET", "value": "1fi93r40nhqp6vkn7cooj94ioasnmo7q6m74d6lblllojn6j9ahs"}
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "/ecs/n11310375-api",
+        "awslogs-region": "ap-southeast-2",
+        "awslogs-stream-prefix": "ecs",
+        "awslogs-create-group": "true"
+      }
+    }
+  }]
+}

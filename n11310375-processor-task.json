@@ -1,0 +1,34 @@
+{
+  "family": "n11310375-processor-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "taskRoleArn": "arn:aws:iam::901444280953:role/CAB432-TASK-ROLE",
+  "executionRoleArn": "arn:aws:iam::901444280953:role/ecsTaskExecutionRole",
+  "containerDefinitions": [{
+    "name": "processor",
+    "image": "901444280953.dkr.ecr.ap-southeast-2.amazonaws.com/n11310375-processor:latest",
+    "essential": true,
+    "environment": [
+      {"name": "AWS_REGION", "value": "ap-southeast-2"},
+      {"name": "SQS_QUEUE_URL", "value": "https://sqs.ap-southeast-2.amazonaws.com/901444280953/n11310375-bg-queue"},
+      {"name": "S3_BUCKET_NAME", "value": "bg-eraser-images-n11310375"},
+      {"name": "DB_HOST", "value": "database-1-instance-1.ce2haupt2cta.ap-southeast-2.rds.amazonaws.com"},
+      {"name": "DB_PORT", "value": "5432"},
+      {"name": "DB_NAME", "value": "cohort_2025"},
+      {"name": "DB_USER", "value": "s009"},
+      {"name": "DB_PASSWORD", "value": "HAVlM9h5FWXA"},
+      {"name": "DB_SSL", "value": "true"}
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "/ecs/n11310375-processor",
+        "awslogs-region": "ap-southeast-2",
+        "awslogs-stream-prefix": "ecs",
+        "awslogs-create-group": "true"
+      }
+    }
+  }]
+}
