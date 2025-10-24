@@ -28,9 +28,27 @@ class DatabaseService {
         table.string('imageName').notNullable();
         table.string('originalS3Url').notNullable();
         table.string('processedS3Url').notNullable();
+        table.string('status').defaultTo('pending'); // Add status column
         table.timestamp('timestamp').defaultTo(knex.fn.now());
+        table.timestamp('updatedAt').defaultTo(knex.fn.now()); // Add updatedAt column
         table.index('userId');
+        table.index('status');
       });
+    } else {
+      // Add columns if they don't exist (for existing tables)
+      const hasStatus = await knex.schema.hasColumn('image_data', 'status');
+      const hasUpdatedAt = await knex.schema.hasColumn('image_data', 'updatedAt');
+      
+      if (!hasStatus || !hasUpdatedAt) {
+        await knex.schema.alterTable('image_data', table => {
+          if (!hasStatus) {
+            table.string('status').defaultTo('pending');
+          }
+          if (!hasUpdatedAt) {
+            table.timestamp('updatedAt').defaultTo(knex.fn.now());
+          }
+        });
+      }
     }
 
     if (!(await knex.schema.hasTable('logs'))) {
@@ -86,12 +104,13 @@ async saveImageData(userId, imageName, originalS3Url, processedS3Url) {
       .where({ imageId, userId })
       .first();
   }
-async updateImageStatus(imageId, status) {
-  return await knex('image_data')
-    .where('imageId', imageId)
-    .update({ 
-      status,
-      updatedAt: knex.fn.now()
+  
+  async updateImageStatus(imageId, status) {
+    return await knex('image_data')
+      .where('imageId', imageId)
+      .update({
+        status,
+        updatedAt: knex.fn.now()
     });
 }
   

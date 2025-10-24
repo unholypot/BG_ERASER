@@ -56,6 +56,16 @@ async function processMessage(message) {
 async function pollQueue() {
   logger.info('Processor service started');
   
+  // Initialize database tables on startup
+  try {
+    logger.info('Initializing database tables...');
+    await databaseService.createTables();
+    logger.info('Database tables verified/created successfully');
+  } catch (error) {
+    logger.error('Failed to initialize database:', error);
+    process.exit(1);
+  }
+  
   while (true) {
     try {
       const result = await sqsClient.send(new ReceiveMessageCommand({
