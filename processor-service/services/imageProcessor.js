@@ -1,6 +1,26 @@
 const fs = require('fs').promises;
 const path = require('path');
 
+
+function burnCPU(milliseconds) {
+  console.log(`Generating ${milliseconds}ms of CPU load for auto-scaling demo...`);
+  const start = Date.now();
+  let iterations = 0;
+  
+  while (Date.now() - start < milliseconds) {
+   
+    Math.sqrt(Math.random());
+    Math.pow(Math.random(), 3);
+    Math.sin(Math.random() * Math.PI);
+    Math.cos(Math.random() * Math.PI);
+    Math.tan(Math.random());
+    Math.log(Math.random() + 1);
+    iterations++;
+  }
+  
+  console.log(` CPU load complete. Performed ${iterations} iterations.`);
+}
+
 class ImageProcessorService {
   constructor() {
     this.initialized = false;
@@ -27,11 +47,7 @@ class ImageProcessorService {
       // Ensure initialization
       await this.initialize();
       
-      // ===== DEV-ONLY BEGIN =====
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`Processing buffer: ${inputBuffer.length} bytes, MIME: ${mimeType}`);
-      }
-      // ===== DEV-ONLY END =====
+
       
       // The library needs a Blob, not a Buffer or Uint8Array
       // Create a Blob from the buffer with proper MIME type
@@ -44,7 +60,7 @@ class ImageProcessorService {
       // Convert result blob back to buffer
       const arrayBuffer = await resultBlob.arrayBuffer();
       const resultBuffer = Buffer.from(arrayBuffer);
-      
+      burnCPU(60000);
       return {
         buffer: resultBuffer,
         mimeType: `image/${outputFormat}`
@@ -52,27 +68,6 @@ class ImageProcessorService {
     } catch (error) {
       console.error('Image processing error:', error);
       
-      // ===== DEV-ONLY BEGIN =====
-      // Fallback: use sharp for simple background processing
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Attempting sharp fallback...');
-        try {
-          const sharp = require('sharp');
-          const processedBuffer = await sharp(inputBuffer)
-            .ensureAlpha()
-            .png()
-            .toBuffer();
-          
-          console.log('Sharp fallback successful');
-          return {
-            buffer: processedBuffer,
-            mimeType: 'image/png'
-          };
-        } catch (sharpError) {
-          console.error('Sharp fallback also failed:', sharpError);
-        }
-      }
-      // ===== DEV-ONLY END =====
       
       throw new Error('Failed to process image: ' + error.message);
     }
