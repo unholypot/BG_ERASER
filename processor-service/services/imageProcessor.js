@@ -1,26 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
 
-
-function burnCPU(milliseconds) {
-  console.log(`Generating ${milliseconds}ms of CPU load for auto-scaling demo...`);
-  const start = Date.now();
-  let iterations = 0;
-  
-  while (Date.now() - start < milliseconds) {
-   
-    Math.sqrt(Math.random());
-    Math.pow(Math.random(), 3);
-    Math.sin(Math.random() * Math.PI);
-    Math.cos(Math.random() * Math.PI);
-    Math.tan(Math.random());
-    Math.log(Math.random() + 1);
-    iterations++;
-  }
-  
-  console.log(` CPU load complete. Performed ${iterations} iterations.`);
-}
-
 class ImageProcessorService {
   constructor() {
     this.initialized = false;
@@ -46,9 +26,7 @@ class ImageProcessorService {
     try {
       // Ensure initialization
       await this.initialize();
-      
-
-      
+            
       // The library needs a Blob, not a Buffer or Uint8Array
       // Create a Blob from the buffer with proper MIME type
       const { Blob } = require('buffer');
@@ -60,7 +38,7 @@ class ImageProcessorService {
       // Convert result blob back to buffer
       const arrayBuffer = await resultBlob.arrayBuffer();
       const resultBuffer = Buffer.from(arrayBuffer);
-      burnCPU(60000);
+      
       return {
         buffer: resultBuffer,
         mimeType: `image/${outputFormat}`
