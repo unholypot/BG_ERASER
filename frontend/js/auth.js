@@ -1,5 +1,5 @@
 // File: frontend/js/auth.js
-// Directory: your-image-app/frontend/js/
+
 
 // Authentication helper functions
 

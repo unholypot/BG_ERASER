@@ -1,8 +1,4 @@
 // File: frontend/js/app.js
-// Directory: your-image-app/frontend/js/
-
-// Main Application JavaScript
-// Handles all functionality for the authenticated app section
 
 // Global variables
 let selectedFile = null;
@@ -34,9 +30,9 @@ document.addEventListener('DOMContentLoaded', function() {
     handleHashNavigation();
 });
 
-// Navigation System (similar to React Router)
+// Navigation System 
 function initializeNavigation() {
-    // Handle nav link clicks
+
     document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
@@ -61,7 +57,7 @@ function navigateTo(page) {
         pageElement.classList.add('active');
     }
     
-    // Update nav active state
+
     document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.remove('active');
         if (link.getAttribute('data-page') === page) {
@@ -94,7 +90,7 @@ function handleHashNavigation() {
     });
 }
 
-// Logout function (matching Remove My Background app)
+
 function logout() {
     clearAuthData();
     window.location.href = 'index.html';
@@ -121,7 +117,7 @@ async function loadDashboardData() {
     }
 }
 
-// Upload Functionality (matching Remove My Background app's Request.js)
+
 function initializeUploadArea() {
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
@@ -261,7 +257,7 @@ async function processImage() {
     }
 }
 
-// Replace the loadGallery function with this updated version:
+
 async function loadGallery() {
     const loading = document.getElementById('galleryLoading');
     const grid = document.getElementById('galleryGrid');
@@ -367,7 +363,7 @@ function downloadImage(imageId, filename) {
     // Create download URL with token as query parameter
     const downloadUrl = `${CONFIG.API_HOST}/images/download/${imageId}?token=${encodeURIComponent(token)}`;
     
-    // Create a temporary link and click it
+
     const link = document.createElement('a');
     link.href = downloadUrl;
     link.download = filename.includes('.') ? filename : `${filename}_processed.png`;

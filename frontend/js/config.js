@@ -1,14 +1,8 @@
 // Configuration for the application
 const CONFIG = {
-    // API endpoint - will be updated when backend is ready
+
     API_HOST: 'https://n11310375-bg.cab432.com',
     
-    // AWS Cognito settings - TO BE CONFIGURED
-    COGNITO: {
-        REGION: '',  // Will be set when we configure Cognito
-        USER_POOL_ID: '',
-        CLIENT_ID: ''
-    },
     
     // Application settings
     APP: {
